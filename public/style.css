@@ -5,7 +5,7 @@
     system-ui,
     sans-serif;
   color: #382f29;
-  background: #faf4e9;
+  background: #faf7f0;
   font-variant-numeric: tabular-nums;
 }
 * {
@@ -35,21 +35,14 @@ header {
   align-items: center;
   gap: 9px;
 }
-.brand img {
-  width: 38px;
-  height: 38px;
-  mix-blend-mode: multiply;
-  border-radius: 50%;
-}
 .tag,
 small {
   font-size: 12px;
   color: #6b5042;
 }
 .tag {
-  background: #eadcc9;
-  padding: 5px 10px;
-  border-radius: 14px;
+  color: #765641;
+  font-weight: 600;
 }
 main {
   padding: 24px 24px 120px;
@@ -76,16 +69,10 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f1dfc6;
-  border-radius: 20px;
-  padding: 24px;
+  border-block: 1px solid #b9a894;
+  padding: 22px 0;
   gap: 6px;
   margin: 20px 0;
-}
-.hero img {
-  width: 32%;
-  max-width: 160px;
-  mix-blend-mode: multiply;
 }
 .big {
   font:
@@ -94,11 +81,9 @@ h3 {
   letter-spacing: -2px;
 }
 .card {
-  background: #fffaf1;
-  border: 1px solid #e7d9c8;
-  border-radius: 16px;
-  padding: 20px;
-  margin: 12px 0;
+  border-bottom: 1px solid #b9a894;
+  padding: 12px 0 22px;
+  margin: 16px 0;
 }
 .row,
 .actions {
@@ -128,7 +113,7 @@ textarea {
 }
 button {
   cursor: pointer;
-  border-radius: 11px;
+  border-radius: 3px;
   border: 1px solid #ccbaa4;
   color: #593d2a;
   background: #fff9ef;
@@ -140,8 +125,7 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
-.primary,
-nav button[aria-current="page"] {
+.primary {
   background: #853f20;
   color: #fff9ef;
   border-color: #853f20;
@@ -174,14 +158,14 @@ textarea {
   margin-top: 5px;
   padding: 10px;
   border: 1px solid #c8b49e;
-  border-radius: 9px;
+  border-radius: 2px;
   background: #fffcf6;
   color: inherit;
 }
 dialog {
   width: min(440px, 94vw);
   border: 0;
-  border-radius: 16px;
+  border-radius: 3px;
   background: #fff9ef;
   color: inherit;
   padding: 24px;
@@ -216,11 +200,156 @@ progress {
   header {
     padding: 15px 16px;
   }
-  .hero,
-  .card {
-    padding: 16px;
-  }
+
   .row {
     font-size: 14px;
   }
+}
+
+[hidden] {
+  display: none !important;
+}
+nav button {
+  border-radius: 0;
+  border-top: 2px solid transparent;
+  color: #665547;
+}
+nav button[aria-current="page"] {
+  border-color: #85401f;
+  color: #713719;
+}
+#welcome {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 66px) 24px 48px;
+}
+.intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.intro small,
+.hero small,
+.card > small {
+  letter-spacing: 0.13em;
+  font-weight: 650;
+  font-size: 11px;
+}
+.intro h1 {
+  font-size: clamp(43px, 7vw, 72px);
+  line-height: 1.03;
+  letter-spacing: -0.045em;
+  margin: 12px 0;
+}
+.intro-copy {
+  max-width: 48ch;
+  color: #655348;
+  margin: 18px 0 32px;
+}
+#setup {
+  border-top: 1px solid #ac9781;
+  padding-top: 10px;
+}
+.setup-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.setup-fields small {
+  display: block;
+  font-weight: 400;
+}
+.setup-fields input {
+  font-size: 24px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #ab917b;
+  border-radius: 0;
+  padding: 6px 0;
+}
+#setup .primary {
+  margin-top: 8px;
+  display: flex;
+  gap: 36px;
+  align-items: center;
+  justify-content: space-between;
+}
+.bird {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  position: relative;
+  touch-action: manipulation;
+}
+.bird span,
+.bird span::after {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: url("/sparrow.png") center/contain no-repeat;
+  pointer-events: none;
+}
+.bird span::after {
+  content: "";
+  clip-path: polygon(
+    22% 64%,
+    24% 55%,
+    29% 47%,
+    37% 41%,
+    44% 38%,
+    52% 36.5%,
+    57% 38%,
+    62% 43%,
+    63% 49%,
+    61% 55%,
+    56% 61%,
+    49% 66%,
+    39% 70%,
+    30% 71%,
+    23% 69%
+  );
+  transform-origin: 55% 43%;
+}
+.portrait {
+  width: clamp(90px, 24vw, 165px);
+  height: auto;
+  aspect-ratio: 1;
+}
+.order-bird {
+  width: 96px;
+  height: 96px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flying span {
+    animation: hop 0.65s ease-in-out 2;
+  }
+  .flying span::after {
+    animation: flap 0.325s ease-in-out 4;
+  }
+  @keyframes hop {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    45% {
+      transform: translateY(-14%) rotate(-4deg);
+    }
+  }
+  @keyframes flap {
+    0%,
+    100% {
+      transform: rotate(0);
+    }
+    50% {
+      transform: rotate(54deg) scaleY(0.85);
+    }
+  }
+}
+:focus-visible {
+  outline: 2px solid #85401f;
+  outline-offset: 3px;
 }

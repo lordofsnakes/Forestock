@@ -45,6 +45,38 @@ let s = JSON.parse(localStorage.getItem(key) || "null") || initial(),
   tab = "Orders",
   market,
   replay = false;
+const welcome = document.querySelector("#welcome");
+let inSetup = !localStorage.getItem(key);
+function showWorkspace() {
+  welcome.hidden = !inSetup;
+  el.hidden = inSetup;
+  document.querySelector("nav").hidden = inSetup;
+}
+showWorkspace();
+document.querySelector("#setup").addEventListener("submit", (event) => {
+  event.preventDefault();
+  s.order.qty = Number(event.target.elements.quantity.value);
+  s.limit = Math.round(Number(event.target.elements.allowance.value) * 100);
+  inSetup = false;
+  record(
+    "Workspace opened",
+    s.order.qty + " lb of copper · " + money(s.limit) + " weekly allowance",
+  );
+  showWorkspace();
+  render();
+  el.querySelector("h1").tabIndex = -1;
+  el.querySelector("h1").focus();
+});
+function animateBird(button) {
+  button.classList.remove("flying");
+  void button.offsetWidth;
+  button.classList.add("flying");
+}
+document.addEventListener("pointerover", (e) => {
+  const button = e.target.closest(".bird");
+  if (button && e.pointerType === "mouse" && !button.contains(e.relatedTarget))
+    animateBird(button);
+});
 function save() {
   localStorage.setItem(key, JSON.stringify(s));
 }
@@ -83,6 +115,7 @@ function assessment(t = now()) {
   );
 }
 function render() {
+  if (inSetup) return;
   const expanded = new Set(
     [...el.querySelectorAll("details[open] summary")].map((n) => n.textContent),
   );
@@ -101,7 +134,7 @@ function render() {
       o.qty +
       " lb</div><strong>" +
       esc(o.notes || "Copper order") +
-      '</strong></div><img src="/sparrow.jpg" alt="Forestock sparrow"></section><section class="card"><div class="row"><h2>Central Metals</h2><span class="tag">' +
+      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section><section class="card"><div class="row"><h2>Central Metals</h2><span class="tag">' +
       o.status +
       '</span></div><p class="hint">Simulated supplier · 24-hour lead time</p>' +
       row("Delivered price", money(price) + " / lb") +
@@ -207,6 +240,12 @@ function render() {
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.matches(".bird")) {
+    animateBird(b);
+    return;
+  }
+  if (!b.dataset.action && !b.dataset.tab && !b.hasAttribute("data-close"))
+    return;
   if (b.dataset.tab) {
     tab = b.dataset.tab;
     render();
