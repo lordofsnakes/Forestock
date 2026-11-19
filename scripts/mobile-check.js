@@ -10,7 +10,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.APP_URL || "http://localhost:3000");
   await page
-    .getByRole("heading", { name: "Your first material order." })
+    .getByRole("heading", { name: "Plan an order" })
     .waitFor();
   await page
     .getByRole("button", { name: "Animate the copper-winged sparrow" })
@@ -21,7 +21,7 @@ try {
       .evaluate((b) => b.classList.contains("flying")),
     true,
   );
-  await page.getByRole("button", { name: "Open my workspace" }).click();
+  await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("button", { name: "Edit need" }).click();
   await page.locator('[name="qty"]').fill("50");
   await page.getByText("Save need", { exact: true }).click();

@@ -195,18 +195,13 @@ function render() {
       " " +
       esc(unit) +
       "</div><strong>" +
-      esc(o.notes || name + " order") +
-      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section><section class="card"><div class="row"><h2>Supplier offer</h2><span class="tag">' +
-      o.status +
-      '</span></div><p class="hint">Simulated supplier · 24-hour lead time</p>' +
-      row("Delivered price", money(price) + " / " + esc(unit)) +
+      esc(o.notes || o.status) +
+      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section>' +
       row("Order total", money(total)) +
       row("Order by", dt(o.due - day)) +
-      row("Needed by", dt(o.due)) +
-      row("Maximum price", money(o.cap) + " / " + esc(unit)) +
-      '</section><section class="card"><h2>' +
+      '<section class="card"><h2>' +
       (open
-        ? "Purchasing decision"
+        ? ({Buy:"Ready to order",Wait:"Watching the market",Blocked:"Order needs attention"}[d.kind])
         : held
           ? "Funds held"
           : o.status === "Paid"
@@ -222,9 +217,9 @@ function render() {
               ? "The supplier accepted your order."
               : "The supplier declined the order.",
       ) +
-      '</p><p class="hint">Local simulation · no funds move onchain.</p><div class="actions">' +
+      '</p><p class="hint">Simulated purchase</p><div class="actions">' +
       (open
-        ? btn("Edit need", "edit") + btn("Run decision", "run", true)
+        ? btn("Run decision", "run", true) + btn("Edit need", "edit")
         : held
           ? btn("Decline", "decline") + btn("Accept order", "accept", true)
           : btn("New material need", "edit", true)) +
@@ -234,7 +229,12 @@ function render() {
           btn("Run at cutoff", "cutoff") +
           "</details>"
         : "") +
-      '</section><section class="card"><details><summary>Gemini forecast · ' +
+      '</section><section class="card"><details><summary>Order details</summary>' +
+      row("Supplier lead time","24 hours") +
+      row("Delivered price",money(price)+" / "+esc(unit)) +
+      row("Maximum price",money(o.cap)+" / "+esc(unit)) +
+      row("Needed by",dt(o.due)) +
+      '</details></section><section class="card"><details><summary>Gemini forecast · ' +
       (replay ? "Recorded replay" : "Market snapshot") +
       "</summary><p>" +
       esc(market?.title || "Market unavailable") +

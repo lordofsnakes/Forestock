@@ -245,7 +245,7 @@ nav button[aria-current="page"] {
 .intro-copy {
   max-width: 48ch;
   color: #655348;
-  margin: 18px 0 32px;
+  margin: 4px 0 20px;
 }
 #setup {
   border-top: 1px solid #ac9781;
@@ -315,13 +315,14 @@ nav button[aria-current="page"] {
   transform-origin: 55% 43%;
 }
 .portrait {
-  width: clamp(90px, 24vw, 165px);
+  width: clamp(125px, 36vw, 202px);
   height: auto;
   aspect-ratio: 1;
 }
 .order-bird {
-  width: 96px;
-  height: 96px;
+  width: clamp(124px, 35vw, 186px);
+  height: auto;
+  aspect-ratio: 1;
 }
 @media (prefers-reduced-motion: no-preference) {
   .flying span {
@@ -365,3 +366,5 @@ select {
   border-radius: 0;
   background: transparent;
 }
+
+.hero > div {min-width:0; overflow-wrap:anywhere}
