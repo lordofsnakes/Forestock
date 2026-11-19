@@ -1,0 +1,63 @@
+{
+  "title": "Copper price on November 19?",
+  "expiry": "2026-11-19T22:00:00.000Z",
+  "observed": "2026-11-19T19:30:31.191Z",
+  "contracts": [
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D66",
+      "strike": 5.66,
+      "bid": 0.95,
+      "ask": 0.99,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D64",
+      "strike": 5.64,
+      "bid": 0.95,
+      "ask": 0.99,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D68",
+      "strike": 5.68,
+      "bid": 0.93,
+      "ask": 0.97,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D70",
+      "strike": 5.7,
+      "bid": 0.87,
+      "ask": 0.91,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D72",
+      "strike": 5.72,
+      "bid": 0.51,
+      "ask": 0.55,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D76",
+      "strike": 5.76,
+      "bid": 0.02,
+      "ask": 0.06,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D78",
+      "strike": 5.78,
+      "bid": 0.01,
+      "ask": 0.06,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    },
+    {
+      "symbol": "GEMI-COPPER2611192200-HI5D84",
+      "strike": 5.84,
+      "bid": 0.01,
+      "ask": 0.05,
+      "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+    }
+  ]
+}

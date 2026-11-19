@@ -1,0 +1,52 @@
+import {price,day,week,refresh,evaluate} from './decision.js';
+const el=document.querySelector('#app'), dialog=document.querySelector('#editor'), form=document.querySelector('#orderForm');
+const key='forestock.v1', money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
+const dt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now=()=>Date.now();
+function initial(){return {week:week(now()),limit:60000,used:0,balance:100000,paused:false,order:{qty:100,cap:600,due:now()+2*day,notes:'Friday cable run',status:'Watching'},activity:[]}}
+let s=JSON.parse(localStorage.getItem(key)||'null')||initial(),tab='Orders', market, replay=false;
+function save(){localStorage.setItem(key,JSON.stringify(s))}
+function record(title,reason){s.activity.unshift({title,reason,time:now()});save()}
+function available(){return Math.max(0,Math.min(s.balance,s.limit-s.used))}
+function row(k,v){return '<div class="row"><span>'+k+'</span><strong>'+v+'</strong></div>'}
+function btn(label,action,primary=false){return '<button data-action="'+action+'" class="'+(primary?'primary':'')+'">'+label+'</button>'}
+function assessment(t=now()){return evaluate(s,market,t,replay&&market?Date.parse(market.observed):now())}
+function render(){
+ refresh(s,now());save();const o=s.order, total=o.qty*price;
+ for(const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false');
+ if(tab==='Orders'){
+ const d=assessment(),open=o.status==='Watching',held=o.status==='Held';
+ el.innerHTML='<h1>Purchase orders</h1><section class="hero"><div><small>COPPER REQUIREMENT</small><div class="big">'+o.qty+' lb</div><strong>'+esc(o.notes||'Copper order')+'</strong></div><img src="/sparrow.jpg" alt="Forestock sparrow"></section><section class="card"><div class="row"><h2>Central Metals</h2><span class="tag">'+o.status+'</span></div><p class="hint">Simulated supplier · 24-hour lead time</p>'+row('Delivered price',money(price)+' / lb')+row('Order total',money(total))+row('Order by',dt(o.due-day))+row('Needed by',dt(o.due))+row('Maximum price',money(o.cap)+' / lb')+'</section><section class="card"><h2>'+ (open?'Purchasing decision':held?'Funds held':o.status==='Paid'?'Supplier receipt':'Funds returned')+'</h2><p>'+esc(open?d.reason:held?'Waiting for the simulated supplier to accept the order.':o.status==='Paid'?'Central Metals accepted your order.':'The supplier declined the order.')+'</p><p class="hint">Local simulation · no funds move onchain.</p><div class="actions">'+(open?btn('Edit need','edit')+btn('Run decision','run',true):held?btn('Decline','decline')+btn('Accept order','accept',true):btn('New material need','edit',true))+'</div>'+(open?'<details><summary>Try deadline scenario</summary><p>Preview the decision at the last safe ordering time.</p>'+btn('Run at cutoff','cutoff')+'</details>':'')+'</section><section class="card"><details><summary>Gemini forecast · '+(replay?'Recorded replay':'Market snapshot')+'</summary><p>'+esc(market?.title||'Market unavailable')+'</p><p class="hint">'+(market?'Fetched '+dt(market.observed)+' · simulated supplier premium $0.12/lb':'')+'</p>'+ (market?.contracts||[]).slice(0,8).map(c=>row('$'+c.strike.toFixed(2)+' or above',Math.round(c.bid*100)+'–'+Math.round(c.ask*100)+'¢')).join('')+'</details></section>';
+ } else if(tab==='Budget'){
+ el.innerHTML='<h1>Purchasing budget</h1><section class="hero"><div><small>AVAILABLE TO ORDER</small><div class="big">'+money(available())+'</div><span>Demo USDC</span></div></section><section class="card"><h2>Weekly allowance</h2>'+row('Limit',money(s.limit))+row('Committed this week',money(s.used))+row('Uncommitted balance',money(s.balance))+row('Funds held',money(o.status==='Held'?total:0))+row('Resets',dt((s.week+1)*7*day-3*day))+'<progress max="'+Math.max(1,s.limit)+'" value="'+s.used+'"></progress><label>Weekly limit (USDC)<input id="limit" type="number" min="0" max="100000" step=".01" value="'+s.limit/100+'"></label><div class="actions">'+btn(s.paused?'Resume':'Pause','pause')+btn('Save allowance','limit',true)+'</div></section>';
+ }else{
+ el.innerHTML='<h1>Activity</h1><section class="card">'+(s.activity.length?s.activity.map(a=>'<div class="log"><small>'+dt(a.time)+'</small><h3>'+esc(a.title)+'</h3><p>'+esc(a.reason)+'</p></div>').join(''):'Decisions and supplier receipts appear here after you run an order.')+'</section>';
+ }
+}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.tab){tab=b.dataset.tab;render();window.scrollTo(0,0);return}
+ if(b.hasAttribute('data-close')){dialog.close();return}
+ const a=b.dataset.action,o=s.order;refresh(s,now());
+ if(a==='edit'&&o.status!=='Held'){
+ form.qty.value=o.qty;form.cap.value=o.cap/100;form.notes.value=o.notes;
+ const local=new Date(Math.max(o.due,now()+day)); form.due.value=new Date(+local-local.getTimezoneOffset()*60000).toISOString().slice(0,16);dialog.showModal();return;
+ }
+ if(a==='pause'){s.paused=!s.paused;record(s.paused?'Allowance paused':'Allowance resumed','Future order commitments updated.')}
+ if(a==='limit'){const i=document.querySelector('#limit');if(!i.reportValidity()||!i.value)return;s.limit=Math.round(Number(i.value)*100);record('Allowance updated',money(s.limit)+' weekly limit.')}
+ if((a==='run'||a==='cutoff')&&o.status==='Watching'){
+ const d=assessment(a==='cutoff'?o.due-day:now());
+ if(d.kind==='Buy'){s.used+=o.qty*price;s.balance-=o.qty*price;o.status='Held';o.commitWeek=s.week}
+ record((a==='cutoff'?'Cutoff scenario · ':'')+d.kind,d.reason+(d.kind==='Buy'?' Held '+money(o.qty*price)+'.':''));
+ if(d.kind!=='Buy')tab='Activity';
+ }
+ if(o.status==='Held'&&(a==='accept'||a==='decline')){
+ if(a==='decline'){s.balance+=o.qty*price;if(o.commitWeek===s.week)s.used-=o.qty*price}
+ o.status=a==='accept'?'Paid':'Refunded';record(o.status,money(o.qty*price)+' · simulated Central Metals order');
+ }
+ render();
+});
+form.addEventListener('submit',e=>{e.preventDefault();s.order={qty:Number(form.qty.value),cap:Math.round(Number(form.cap.value)*100),due:new Date(form.due.value).getTime(),notes:form.notes.value,status:'Watching'};record('Material need saved',s.order.qty+' lb of copper');dialog.close();render()});
+async function loadMarket(){try{const r=await fetch('/api/market');if(!r.ok)throw Error();market=await r.json();replay=false}catch{market=await (await fetch('/replay.json')).json();replay=true}render()}
+render();loadMarket();setInterval(loadMarket,60000);

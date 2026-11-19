@@ -1,0 +1,1 @@
+{"name":"forestock","private":true,"type":"module","scripts":{"test":"node --test test/*.test.js","dev":"node dev.js"},"engines":{"node":"22.x"}}
