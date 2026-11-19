@@ -34,3 +34,7 @@ Use Node 22+, npm and Foundry. Run `npm ci`, `npm test`, `forge test` and `npm r
 To run on Arc, compile with `forge build` and run `node scripts/escrow-demo.js`. It creates dedicated local demo accounts with owner-only file permissions and reports the public address to fund when required. Eight test USDC covers the initial one-pound rehearsal, role funding and gas. A separate `--refund-demo` run uses additional test funds to exercise a merchant decline. The process must remain running for an outstanding order to reach cutoff. Re-running reconciles its saved order. Use dedicated test accounts only.
 
 Vercel deploys static assets from public/ and the public Gemini endpoint from api/. No private keys or Gemini API key belong in the web deployment. Use the production alias above or the repository's linked Vercel project. Integration targets are the DeFi and Onchain Applications track, Best use of Arc and Gemini Prediction Markets.
+
+## Feature tests
+
+Run `npm ci` and `npm run test:all` with Chrome, Node 22+ and Foundry on the machine. This runs the decision and Gemini API tests, Solidity vault tests, mobile browser flows and an isolated purchasing-worker rehearsal. The browser suite starts its own server on port 3271 with controlled market responses. The worker suite starts Anvil on port 18546 with disposable accounts and a temporary order directory. Both ports must be available. To smoke-test the public preview, run `APP_URL=https://forestock-brown.vercel.app node scripts/mobile-check.js`.

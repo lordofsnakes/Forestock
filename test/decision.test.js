@@ -54,3 +54,32 @@ test("oil uses its quoted price and ignores copper signals", () => {
     "Blocked",
   );
 });
+
+test("pause, stock and unit price ceilings still apply at cutoff", () => {
+  for (const [update, reason] of [
+    [{ paused: true }, /paused/],
+    [{ order: { ...s.order, qty: 501 } }, /500/],
+    [{ order: { ...s.order, cap: 579 } }, /unit-price/],
+  ]) {
+    const result = evaluate({ ...s, ...update }, null, t + day);
+    assert.equal(result.kind, "Blocked");
+    assert.match(result.reason, reason);
+  }
+});
+test("weak forecasts and markets settling outside the purchasing window wait", () => {
+  const weak = { ...m, contracts: [{ strike: 5.7, bid: 0.52, ask: 0.56 }] };
+  for (const market of [
+    weak,
+    { ...m, expiry: new Date(t) },
+    { ...m, expiry: new Date(t + 2 * day) },
+  ]) {
+    assert.equal(evaluate(s, market, t).kind, "Wait");
+  }
+});
+test("weekly allowance renews exactly at Monday midnight UTC", () => {
+  const boundary = Date.parse("2026-11-23T00:00:00Z");
+  const state = { week: week(boundary - 1), used: 58000, balance: 42000 };
+  assert.equal(refresh(state, boundary - 1).used, 58000);
+  assert.equal(refresh(state, boundary).used, 0);
+  assert.equal(state.balance, 42000);
+});

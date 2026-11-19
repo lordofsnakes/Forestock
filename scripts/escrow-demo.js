@@ -18,7 +18,7 @@ import { evaluate, day } from "../public/decision.js";
 
 const local = process.argv.includes("--local");
 const endpoint = local
-  ? "http://127.0.0.1:8545"
+  ? "http://127.0.0.1:" + (process.env.FORESTOCK_LOCAL_PORT || "8545")
   : "https://rpc.testnet.arc.network";
 const chain = defineChain({
   id: local ? 31337 : 5042002,
@@ -26,7 +26,7 @@ const chain = defineChain({
   nativeCurrency: { name: "Test USDC", symbol: "USDC", decimals: 18 },
   rpcUrls: { default: { http: [endpoint] } },
 });
-const dir = path.join(
+const dir = (local && process.env.FORESTOCK_LOCAL_DIR) || path.join(
   os.homedir(),
   ".config",
   local ? "forestock-local" : "forestock-testnet",
@@ -89,7 +89,7 @@ if (!state && refundDemo) {
     id: keccak256(toHex("refund-rehearsal")),
     terms: paid.terms,
     quote: paid.quote,
-    cutoff: Math.floor(Date.now() / 1000) + 60,
+    cutoff: Math.floor(Date.now() / 1000) + (local ? 3 : 60),
   };
   const funding = await wallet(buyer).writeContract({
     address: state.vault,

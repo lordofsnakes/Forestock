@@ -68,4 +68,49 @@ contract ForestockTest {
         vm.expectRevert();
         vault.accept(id, quote);
     }
+
+    receive() external payable {}
+
+    function testDepositAndWithdrawUncommittedFunds() public {
+        lock();
+        vault.withdraw(420 ether);
+        require(vault.freeBalance() == 0 && address(vault).balance == 580 ether);
+        vault.deposit{value: 100 ether}();
+        require(vault.freeBalance() == 100 ether && vault.committed(vault.period()) == 580 ether);
+    }
+
+    function testSupplierDeclineRestoresAllowanceOnce() public {
+        lock();
+        vm.prank(supplier);
+        vault.refund(id);
+        require(vault.freeBalance() == 1000 ether && vault.committed(vault.period()) == 0);
+        vm.expectRevert();
+        vm.prank(supplier);
+        vault.refund(id);
+    }
+
+    function testPendingOrderCanSettleWhilePaused() public {
+        lock();
+        vault.configure(600 ether, true);
+        vm.prank(supplier);
+        vault.accept(id, quote);
+        require(supplier.balance == 580 ether);
+    }
+
+    function testBuyerOnlyMandateAndPaymentBoundToQuote() public {
+        vm.expectRevert();
+        vm.prank(agent);
+        vault.configure(10000 ether, false);
+        lock();
+        vm.expectRevert();
+        vm.prank(supplier);
+        vault.accept(id, bytes32("other quote"));
+        vm.expectRevert();
+        vault.refund(id);
+        vm.warp(block.timestamp + 300);
+        vm.expectRevert();
+        vm.prank(supplier);
+        vault.accept(id, quote);
+        vault.refund(id);
+    }
 }
