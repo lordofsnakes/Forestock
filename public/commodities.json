@@ -1,0 +1,262 @@
+{
+  "assets": [
+    {
+      "series": "BRENT",
+      "name": "Oil (Brent)",
+      "unit": "bbl",
+      "price": 9180,
+      "premium": 180,
+      "market": {
+        "series": "BRENT",
+        "title": "Oil (Brent) price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-BRENT2611192200-HI89",
+            "strike": 89,
+            "bid": 0.86,
+            "ask": 0.9,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/brent_oil_facb4f65-1d38-4473-9ab0-af5e5f6a6f7c.pdf"
+          },
+          {
+            "symbol": "GEMI-BRENT2611192200-HI91",
+            "strike": 91,
+            "bid": 0.02,
+            "ask": 0.06,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/brent_oil_facb4f65-1d38-4473-9ab0-af5e5f6a6f7c.pdf"
+          },
+          {
+            "symbol": "GEMI-BRENT2611192200-HI92",
+            "strike": 92,
+            "bid": 0.01,
+            "ask": 0.05,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/brent_oil_facb4f65-1d38-4473-9ab0-af5e5f6a6f7c.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "series": "COPPER",
+      "name": "Copper",
+      "unit": "lb",
+      "price": 580,
+      "premium": 12,
+      "market": {
+        "series": "COPPER",
+        "title": "Copper price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D66",
+            "strike": 5.66,
+            "bid": 0.95,
+            "ask": 0.99,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D64",
+            "strike": 5.64,
+            "bid": 0.95,
+            "ask": 0.99,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D68",
+            "strike": 5.68,
+            "bid": 0.92,
+            "ask": 0.96,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D70",
+            "strike": 5.7,
+            "bid": 0.68,
+            "ask": 0.72,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D72",
+            "strike": 5.72,
+            "bid": 0.23,
+            "ask": 0.27,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D74",
+            "strike": 5.74,
+            "bid": 0.04,
+            "ask": 0.09,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D76",
+            "strike": 5.76,
+            "bid": 0.02,
+            "ask": 0.06,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D78",
+            "strike": 5.78,
+            "bid": 0.01,
+            "ask": 0.05,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D80",
+            "strike": 5.8,
+            "bid": 0.01,
+            "ask": 0.05,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          },
+          {
+            "symbol": "GEMI-COPPER2611192200-HI5D84",
+            "strike": 5.84,
+            "bid": 0.01,
+            "ask": 0.05,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/copper_0ebd7c1e-0d3f-4120-8aa6-57f9f97699ba.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "series": "NGAS",
+      "name": "Natural Gas",
+      "unit": "MMBtu",
+      "price": 383,
+      "premium": 8,
+      "market": {
+        "series": "NGAS",
+        "title": "Natural Gas price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-NGAS2611192200-HI3D675",
+            "strike": 3.675,
+            "bid": 0.43,
+            "ask": 0.47,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/NATGAS1_Terms_and_Conditions_74071889-27c7-4398-9fc7-203097d4d2c2.pdf"
+          },
+          {
+            "symbol": "GEMI-NGAS2611192200-HI3D700",
+            "strike": 3.7,
+            "bid": 0.14,
+            "ask": 0.18,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/NATGAS1_Terms_and_Conditions_74071889-27c7-4398-9fc7-203097d4d2c2.pdf"
+          },
+          {
+            "symbol": "GEMI-NGAS2611192200-HI3D725",
+            "strike": 3.725,
+            "bid": 0.03,
+            "ask": 0.08,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/NATGAS1_Terms_and_Conditions_74071889-27c7-4398-9fc7-203097d4d2c2.pdf"
+          },
+          {
+            "symbol": "GEMI-NGAS2611192200-HI3D750",
+            "strike": 3.75,
+            "bid": 0.01,
+            "ask": 0.05,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/NATGAS1_Terms_and_Conditions_74071889-27c7-4398-9fc7-203097d4d2c2.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "series": "WTI",
+      "name": "Oil (WTI)",
+      "unit": "bbl",
+      "price": 8466,
+      "premium": 166,
+      "market": {
+        "series": "WTI",
+        "title": "Oil (WTI) price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-WTI2611192200-HI82",
+            "strike": 82,
+            "bid": 0.88,
+            "ask": 0.92,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/wti_oil_bb9688a8-b518-47d3-b55b-ae6d83753268.pdf"
+          },
+          {
+            "symbol": "GEMI-WTI2611192200-HI83",
+            "strike": 83,
+            "bid": 0.31,
+            "ask": 0.35,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/wti_oil_bb9688a8-b518-47d3-b55b-ae6d83753268.pdf"
+          },
+          {
+            "symbol": "GEMI-WTI2611192200-HI84",
+            "strike": 84,
+            "bid": 0.02,
+            "ask": 0.07,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/wti_oil_bb9688a8-b518-47d3-b55b-ae6d83753268.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "series": "XAG",
+      "name": "Silver",
+      "unit": "troy oz",
+      "price": 4590,
+      "premium": 90,
+      "market": {
+        "series": "XAG",
+        "title": "Silver price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-XAG2611192200-HI44",
+            "strike": 44,
+            "bid": 0.78,
+            "ask": 0.82,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/silver_bf12c4df-32c2-45bf-8790-d068bc5c2763.pdf"
+          },
+          {
+            "symbol": "GEMI-XAG2611192200-HI44D5",
+            "strike": 44.5,
+            "bid": 0.12,
+            "ask": 0.16,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/silver_bf12c4df-32c2-45bf-8790-d068bc5c2763.pdf"
+          },
+          {
+            "symbol": "GEMI-XAG2611192200-HI47",
+            "strike": 47,
+            "bid": 0.05,
+            "ask": 0.06,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/silver_bf12c4df-32c2-45bf-8790-d068bc5c2763.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "series": "XAU",
+      "name": "Gold",
+      "unit": "troy oz",
+      "price": 379950,
+      "premium": 7450,
+      "market": {
+        "series": "XAU",
+        "title": "Gold price on November 19?",
+        "expiry": "2026-11-19T22:00:00.000Z",
+        "observed": "2026-11-19T19:52:44.850Z",
+        "contracts": [
+          {
+            "symbol": "GEMI-XAU2611192200-HI3675",
+            "strike": 3675,
+            "bid": 0.39,
+            "ask": 0.43,
+            "rules": "https://assets.gemini.com/predictions/terms_and_conditions/gold_2a7cbe98-611e-4350-9ab4-e09937e7e4a0.pdf"
+          }
+        ]
+      }
+    }
+  ]
+}

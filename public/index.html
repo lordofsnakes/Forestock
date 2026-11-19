@@ -37,13 +37,14 @@
         </button>
       </div>
       <p class="intro-copy">
-        Give Forestock a copper requirement and a weekly allowance. It watches
+        Give Forestock a material requirement and a weekly allowance. It watches
         market forecasts and checks when to order from your supplier.
       </p>
       <form id="setup">
+        <label>Commodity<select name="asset"></select></label>
         <div class="setup-fields">
           <label
-            >Copper needed <small>lb</small
+            >Quantity needed <small data-unit>lb</small
             ><input
               name="quantity"
               type="number"
@@ -82,19 +83,20 @@
     <dialog id="editor">
       <form id="orderForm">
         <h2>Material need</h2>
+        <label>Commodity<select name="asset"></select></label>
         <label
-          >Copper required (lb)<input
+          >Quantity required (<span data-unit>lb</span>)<input
             name="qty"
             type="number"
             min="1"
             max="10000"
             required /></label
         ><label
-          >Maximum delivered price ($/lb)<input
+          >Maximum delivered price ($/<span data-unit>lb</span>)<input
             name="cap"
             type="number"
             min=".01"
-            max="100"
+            max="10000000"
             step=".01"
             required /></label
         ><label
@@ -105,7 +107,7 @@
         ><label
           >Receiving notes<textarea name="notes" maxlength="300"></textarea>
         </label>
-        <p>Central Metals · simulated supplier · 24-hour lead time</p>
+        <p>Demo supplier · simulated supplier · 24-hour lead time</p>
         <div class="actions">
           <button type="button" data-close>Cancel</button
           ><button class="primary">Save need</button>

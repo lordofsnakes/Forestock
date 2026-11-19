@@ -13,12 +13,14 @@ export function refresh(s, t) {
 }
 export function evaluate(s, m, t, marketTime = t) {
   const o = s.order,
+    price = o.asset?.price ?? 580,
+    premium = o.asset?.premium ?? 12,
     total = o.qty * price;
   const block = (reason) => ({ kind: "Blocked", reason });
   if (s.paused) return block("Your purchasing allowance is paused.");
   if (o.cap < price)
     return block("The supplier quote exceeds your unit-price limit.");
-  if (o.qty > 500) return block("The supplier has only 500 lb available.");
+  if (o.qty > 500) return block("The supplier has only 500 units available.");
   if (total > Math.min(s.balance, s.limit - s.used))
     return block("The order exceeds your available purchasing funds.");
   const cutoff = o.due - day;
@@ -29,8 +31,9 @@ export function evaluate(s, m, t, marketTime = t) {
       kind: "Buy",
       reason: "Last safe ordering time reached. The offer meets your terms.",
     };
-  const c = m?.contracts
-    .filter((c) => Math.round(c.strike * 100) + premium > price)
+  const sameMarket = (m?.series ?? "COPPER") === (o.asset?.series ?? "COPPER");
+  const c = (sameMarket ? m : null)?.contracts
+    .filter((c) => c.strike * 100 + premium > price)
     .sort((a, b) => a.strike - b.strike)[0];
   if (
     !c ||
@@ -48,8 +51,13 @@ export function evaluate(s, m, t, marketTime = t) {
     reason:
       "The market implies " +
       Math.round(probability * 100) +
-      "% for copper at or above $" +
-      c.strike.toFixed(2) +
+      "% for " +
+      (o.asset?.name ?? "Copper") +
+      " at or above $" +
+      c.strike.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4,
+      }) +
       ". Your early-order threshold is 65%.",
     contract: c,
   };

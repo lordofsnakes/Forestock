@@ -29,3 +29,28 @@ test("renewal preserves uncommitted balance", () => {
   assert.equal(v.used, 0);
   assert.equal(v.balance, 90);
 });
+test("oil uses its quoted price and ignores copper signals", () => {
+  const order = {
+    ...s.order,
+    qty: 2,
+    cap: 9000,
+    asset: {
+      series: "WTI",
+      name: "WTI",
+      unit: "bbl",
+      price: 8400,
+      premium: 100,
+    },
+  };
+  const market = {
+    ...m,
+    series: "WTI",
+    contracts: [{ strike: 84, bid: 0.8, ask: 0.85 }],
+  };
+  assert.equal(evaluate({ ...s, order }, market, t).kind, "Buy");
+  assert.equal(evaluate({ ...s, order }, m, t).kind, "Wait");
+  assert.equal(
+    evaluate({ ...s, order, balance: 16799 }, market, t).kind,
+    "Blocked",
+  );
+});

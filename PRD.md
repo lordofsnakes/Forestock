@@ -6,7 +6,7 @@ Draft product requirements for the UBC hackathon in Austin.
 
 Forestock is a purchasing agent for small manufacturers. The buyer tells Forestock what material the factory needs and gives it a standing budget. The agent watches Gemini prediction markets, compares the forecast with offers from existing suppliers, and makes authorized purchasing decisions while the buyer is away. The manufacturer comes back to see what the agent decided, what it spent and what still needs attention.
 
-Start with one buyer-entered copper order for a cable manufacturer. Use one simulated external merchant in the demo. The merchant can sell through its own website or ordering API. The Forestock experience centers on the buyer. The agent places the actual material order. The forecast informs when it buys.
+Let the buyer enter an order for any commodity listed in Gemini’s active Commodities category. Keep copper as the worked example and the recorded Arc rehearsal. Use one simulated external merchant in the demo. The merchant can sell through its own website or ordering API. The Forestock experience centers on the buyer. The agent places the actual material order. The forecast informs when it buys.
 
 ## Competition targets
 

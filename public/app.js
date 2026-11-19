@@ -1,4 +1,4 @@
-import { price, day, week, refresh, evaluate } from "./decision.js";
+import { day, week, refresh, evaluate } from "./decision.js";
 const el = document.querySelector("#app"),
   dialog = document.querySelector("#editor"),
   form = document.querySelector("#orderForm");
@@ -55,12 +55,23 @@ function showWorkspace() {
 showWorkspace();
 document.querySelector("#setup").addEventListener("submit", (event) => {
   event.preventDefault();
+  s.order.asset = compact(selected(event.target));
+  s.order.cap = Math.ceil(s.order.asset.price * 1.035);
+  s.order.notes = "";
+  syncMarket();
   s.order.qty = Number(event.target.elements.quantity.value);
   s.limit = Math.round(Number(event.target.elements.allowance.value) * 100);
   inSetup = false;
   record(
     "Workspace opened",
-    s.order.qty + " lb of copper · " + money(s.limit) + " weekly allowance",
+    s.order.qty +
+      " " +
+      current().unit +
+      " of " +
+      current().name +
+      " · " +
+      money(s.limit) +
+      " weekly allowance",
   );
   showWorkspace();
   render();
@@ -77,6 +88,52 @@ document.addEventListener("pointerover", (e) => {
   if (button && e.pointerType === "mouse" && !button.contains(e.relatedTarget))
     animateBird(button);
 });
+function compact(asset) {
+  const { series, name, unit, price, premium } = asset;
+  return { series, name, unit, price, premium };
+}
+const copper = {
+  series: "COPPER",
+  name: "Copper",
+  unit: "lb",
+  price: 580,
+  premium: 12,
+};
+let assets = [copper];
+function current() {
+  return s.order.asset || copper;
+}
+function selected(f) {
+  return assets.find((a) => a.series === f.elements.asset.value) || current();
+}
+function syncMarket() {
+  market = assets.find((a) => a.series === current().series)?.market;
+}
+function updatePicker(f) {
+  const a = selected(f);
+  f.querySelectorAll("[data-unit]").forEach((n) => (n.textContent = a.unit));
+}
+function fillPickers() {
+  for (const f of [document.querySelector("#setup"), form]) {
+    const field = f.elements.asset,
+      previous = field.value || current().series;
+    const choices = [...assets];
+    if (!choices.some((a) => a.series === current().series))
+      choices.push(current());
+    field.replaceChildren(...choices.map((a) => new Option(a.name, a.series)));
+    field.value = choices.some((a) => a.series === previous)
+      ? previous
+      : choices[0].series;
+    updatePicker(f);
+  }
+}
+for (const f of [document.querySelector("#setup"), form])
+  f.elements.asset.addEventListener("change", () => {
+    const a = selected(f);
+    updatePicker(f);
+    if (f === form) form.cap.value = ((a.price / 100) * 1.03).toFixed(2);
+  });
+fillPickers();
 function save() {
   localStorage.setItem(key, JSON.stringify(s));
 }
@@ -121,6 +178,7 @@ function render() {
   );
   refresh(s, now());
   save();
+  const { price, name, unit, premium } = current();
   const o = s.order,
     total = o.qty * price;
   for (const b of document.querySelectorAll("[data-tab]"))
@@ -130,18 +188,22 @@ function render() {
       open = o.status === "Watching",
       held = o.status === "Held";
     el.innerHTML =
-      '<h1>Purchase orders</h1><section class="hero"><div><small>COPPER REQUIREMENT</small><div class="big">' +
+      '<h1>Purchase orders</h1><section class="hero"><div><small>' +
+      esc(name.toUpperCase()) +
+      ' REQUIREMENT</small><div class="big">' +
       o.qty +
-      " lb</div><strong>" +
-      esc(o.notes || "Copper order") +
-      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section><section class="card"><div class="row"><h2>Central Metals</h2><span class="tag">' +
+      " " +
+      esc(unit) +
+      "</div><strong>" +
+      esc(o.notes || name + " order") +
+      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section><section class="card"><div class="row"><h2>Supplier offer</h2><span class="tag">' +
       o.status +
       '</span></div><p class="hint">Simulated supplier · 24-hour lead time</p>' +
-      row("Delivered price", money(price) + " / lb") +
+      row("Delivered price", money(price) + " / " + esc(unit)) +
       row("Order total", money(total)) +
       row("Order by", dt(o.due - day)) +
       row("Needed by", dt(o.due)) +
-      row("Maximum price", money(o.cap) + " / lb") +
+      row("Maximum price", money(o.cap) + " / " + esc(unit)) +
       '</section><section class="card"><h2>' +
       (open
         ? "Purchasing decision"
@@ -157,7 +219,7 @@ function render() {
           : held
             ? "Waiting for the simulated supplier to accept the order."
             : o.status === "Paid"
-              ? "Central Metals accepted your order."
+              ? "The supplier accepted your order."
               : "The supplier declined the order.",
       ) +
       '</p><p class="hint">Local simulation · no funds move onchain.</p><div class="actions">' +
@@ -180,14 +242,22 @@ function render() {
       (market
         ? "Fetched " +
           dt(market.observed) +
-          " · simulated supplier premium $0.12/lb"
+          " · simulated supplier premium " +
+          money(premium) +
+          "/" +
+          esc(unit)
         : "") +
       "</p>" +
       (market?.contracts || [])
         .slice(0, 8)
         .map((c) =>
           row(
-            "$" + c.strike.toFixed(2) + " or above",
+            "$" +
+              c.strike.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4,
+              }) +
+              " or above",
             Math.round(c.bid * 100) + "–" + Math.round(c.ask * 100) + "¢",
           ),
         )
@@ -256,10 +326,13 @@ document.addEventListener("click", (e) => {
     dialog.close();
     return;
   }
+  const { price } = current();
   const a = b.dataset.action,
     o = s.order;
   refresh(s, now());
   if (a === "edit" && o.status !== "Held") {
+    form.elements.asset.value = current().series;
+    updatePicker(form);
     form.qty.value = o.qty;
     form.cap.value = o.cap / 100;
     form.notes.value = o.notes;
@@ -306,7 +379,7 @@ document.addEventListener("click", (e) => {
     o.status = a === "accept" ? "Paid" : "Refunded";
     record(
       o.status,
-      money(o.qty * price) + " · simulated Central Metals order",
+      money(o.qty * price) + " · simulated " + current().name + " order",
     );
   }
   render();
@@ -314,13 +387,18 @@ document.addEventListener("click", (e) => {
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   s.order = {
+    asset: compact(selected(form)),
     qty: Number(form.qty.value),
     cap: Math.round(Number(form.cap.value) * 100),
     due: new Date(form.due.value).getTime(),
     notes: form.notes.value,
     status: "Watching",
   };
-  record("Material need saved", s.order.qty + " lb of copper");
+  syncMarket();
+  record(
+    "Material need saved",
+    s.order.qty + " " + current().unit + " of " + current().name + "",
+  );
   dialog.close();
   render();
 });
@@ -328,12 +406,14 @@ async function loadMarket() {
   try {
     const r = await fetch("/api/market");
     if (!r.ok) throw Error();
-    market = await r.json();
+    assets = (await r.json()).assets;
     replay = false;
   } catch {
-    market = await (await fetch("/replay.json")).json();
+    assets = (await (await fetch("/commodities.json")).json()).assets;
     replay = true;
   }
+  fillPickers();
+  syncMarket();
   if (tab === "Orders") render();
 }
 render();

@@ -1,16 +1,18 @@
 # Forestock
 
-[Open the mobile prototype](https://forestock-brown.vercel.app). A manufacturer enters a copper requirement and standing weekly allowance. Gemini copper contracts inform purchase timing. The order deadline takes precedence if the supplier can still fulfill the need within the buyer's limits.
+[Open the mobile prototype](https://forestock-brown.vercel.app). A manufacturer enters a commodity requirement and standing weekly allowance. Gemini copper contracts inform purchase timing. The order deadline takes precedence if the supplier can still fulfill the need within the buyer's limits.
 
 ## Try the demo
 
-Open Orders, edit the pounds, price cap, notes and arrival time, then run the decision. The simulated supplier offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. Try the cutoff scenario to hold funds, then accept or decline the order and inspect Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
+Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time, then run the decision. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. Try the cutoff scenario to hold funds, then accept or decline the order and inspect Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
 
 The editable public workspace saves to this browser. Its controls simulate settlement. Activity also includes a separately executed Arc testnet purchase with independently verifiable receipts. Phone edits do not authorize the funded testnet signer.
 
 ## Market data and rule
 
-The server queries active copper events from Gemini's public events API. The linked contract terms specify the KK_RFR_COPPERUSDC index. Broker fees, physical delivery and a $0.12/lb supplier premium are represented by an illustrative delivered quote. Early buying requires a valid order, a two-sided quote with spread at most 10 cents, a snapshot fetched within two minutes and an event resolving by the order cutoff. Use the lowest quoted strike where strike plus premium exceeds today's supplier price. A midpoint of at least 65% triggers an early purchase. The midpoint estimates market expectations. A fetch timestamp measures snapshot age and cannot establish when traders last updated the book.
+The buyer can select any series discovered in Gemini’s active Commodities category. Orders retain their material, unit and simulated supplier quote after a refresh. Non-copper demo quotes use the middle listed strike plus a sample premium.
+
+The server queries active commodity events from Gemini's public events API. For copper, the linked contract terms specify the KK_RFR_COPPERUSDC index. Broker fees, physical delivery and a $0.12/lb supplier premium are represented by an illustrative delivered quote. Early buying requires a valid order, a two-sided quote with spread at most 10 cents, a snapshot fetched within two minutes and an event resolving by the order cutoff. Use the lowest quoted strike where strike plus premium exceeds today's supplier price. A midpoint of at least 65% triggers an early purchase. The midpoint estimates market expectations. A fetch timestamp measures snapshot age and cannot establish when traders last updated the book.
 
 The preview labels the dated fallback when Gemini is unavailable. The command-line agent never spends against replay data. Both paths enforce unit price, delivery, stock and budget at cutoff.
 
