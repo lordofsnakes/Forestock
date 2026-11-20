@@ -9,6 +9,7 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.APP_URL || "http://localhost:3000");
+  await page.getByRole("button", { name: "Continue with demo balance" }).click();
   await page
     .getByRole("heading", { name: "Plan an order" })
     .waitFor();
@@ -32,6 +33,7 @@ try {
   await page.getByText("Run at cutoff").click();
   await page.getByText("Accept order").click();
   await page.reload();
+  await page.getByRole("button", { name: "Continue with demo balance" }).click();
   await page.getByRole("button", { name: "600 USDC", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("heading", { name: "Supplier receipt" }).waitFor();

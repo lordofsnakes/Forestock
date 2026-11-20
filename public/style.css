@@ -375,4 +375,9 @@ select {
 .need-entry { width:100%; border:0; border-bottom:1px solid #dfd0bb; border-radius:0; padding:12px; background:transparent; text-align:left; font-weight:400; }
 .need-entry[aria-pressed="true"] { background:#eee7d9; box-shadow:inset 3px 0 #853f20; }
 .order-heading h2 { font:normal clamp(28px,5vw,40px)/1.05 Georgia,serif; }
-#walletPanel output { display:block; overflow-wrap:anywhere; margin:12px 0; }
+
+#walletIntro { max-width: 660px; margin: auto; padding: 24px clamp(16px, 4vw, 30px); }
+#walletControls { padding-block: 16px; }
+#walletControls output { display: block; overflow-wrap: anywhere; margin: 12px 0; }
+#walletIntro .actions { align-items: stretch; }
+#continueSetup { border: 0; background: transparent; padding-inline: 0; text-decoration: underline; }

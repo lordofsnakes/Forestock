@@ -33,13 +33,22 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
     return route.fulfill({ json: { id, jsonrpc: "2.0", result } });
   });
   await page.goto("http://localhost:3271/");
-  await page.getByRole("button", { name: "Set up wallet" }).click();
+  await expect(page.getByRole("heading", { name: "Your purchasing wallet" })).toBeVisible();
+  await expect(page.locator("#welcome")).toBeHidden();
   await page.getByRole("button", { name: "Create passkey wallet" }).click();
-  await expect(page.locator("#walletPanel output")).toHaveText(address);
+  await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   await page.reload();
+  await expect(page.locator("#walletIntro output")).toHaveText(address);
+  await page.getByRole("button", { name: "Continue to order planning" }).click();
   await page.getByRole("button", { name: "Wallet", exact: true }).click();
   await page.getByRole("button", { name: "Use existing passkey" }).click();
   await expect(page.locator("#walletPanel p[role=status]")).toContainText("Passkey verified");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.evaluate(() => localStorage.removeItem("forestock.arcWallet"));
+  await page.reload();
+  await page.getByRole("button", { name: "Use existing passkey" }).click();
+  await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   expect(methods).toEqual(["rp_getRegistrationOptions","rp_getRegistrationVerification","circle_getAddress",
+    "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress",
     "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress"]);
 });

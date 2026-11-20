@@ -7,6 +7,7 @@ async function send(page, text) {
 }
 async function start(page, asset = "COPPER") {
   await page.goto("/");
+  await button(page, "Continue with demo balance").click();
   await button(page, data.assets.find(a => a.series === asset).name).click();
   await finishSetup(page);
 }
@@ -45,6 +46,7 @@ test("all six materials have units, editable quantities and persistent supplier 
     await expect(page.locator(".order-summary")).toContainText("2 " + unit);
   }
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await finishSetup(page);
   await expect(
     page.getByText("Morning delivery", { exact: true }),
@@ -76,6 +78,7 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await button(page, "Orders").click();
   await button(page, "Decline").click();
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await finishSetup(page);
   await expect(
     page.getByRole("heading", { name: "Funds returned" }),
@@ -116,10 +119,12 @@ test("live data advances an eligible order and supplier acceptance persists", as
   ).toBeVisible();
   await button(page, "Run decision").click();
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await expect(page.getByRole("log")).toContainText("is held");
   await finishSetup(page);
   await button(page, "Accept order").click();
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await finishSetup(page);
   await expect(
     page.getByRole("heading", { name: "Supplier receipt" }),
@@ -132,6 +137,7 @@ test("legacy orders require onboarding; mascot respects reduced motion", async (
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await button(page, "Continue with demo balance").click();
   const bird = button(page, "Animate the copper-winged sparrow");
   await bird.focus();
   await page.keyboard.press("Enter");
@@ -156,6 +162,7 @@ test("legacy orders require onboarding; mascot respects reduced motion", async (
     ),
   );
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await expect(page.locator(".message").last()).toHaveCSS("animation-name", "none");
   await finishSetup(page);
   await expect(page.locator(".order-summary")).toContainText("7 lb");
@@ -197,6 +204,7 @@ test("AI questions retain context, corrections update the draft and confirmation
     return route.fulfill({ json: { reply: ["Shall we review?", "Your allowance is a weekly cap.", "Updated to 35 pounds."][requests.length - 1], draft } });
   });
   await page.goto("/");
+  await button(page, "Continue with demo balance").click();
   await send(page, "Our shop needs twenty-five pounds of copper. Set aside $150 each week.");
   await expect(page.locator(".draft-terms")).toContainText("25 lb of Copper");
   await send(page, "How does that cap work?");
@@ -214,6 +222,7 @@ test("AI questions retain context, corrections update the draft and confirmation
 test("AI outage keeps the message available for retry and quick replies still work", async ({ page }) => {
   await page.route("**/api/chat", r => r.fulfill({ status: 503, body: "{}" }));
   await page.goto("/");
+  await button(page, "Continue with demo balance").click();
   await send(page, "What is a weekly allowance?");
   await expect(page.getByRole("log")).toContainText("couldn’t reach AI chat");
   await expect(page.getByRole("textbox")).toHaveValue("What is a weekly allowance?");
@@ -240,6 +249,7 @@ test("multiple needs survive a reload and settle against one shared balance", as
   const held = 58000 + data.assets.find(a => a.series === "NGAS").price;
   await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText((held / 100).toFixed(2));
   await page.reload();
+  await button(page, "Continue with demo balance").click();
   await finishSetup(page);
   await button(page, "Decline").click();
   await expect(page.locator(".needs-overview > .need-entry")).toHaveCount(1);

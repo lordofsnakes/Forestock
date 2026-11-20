@@ -21,9 +21,26 @@
           <span></span></button
         >Forestock
       </div>
-      <button id="openWallet" type="button">Set up wallet</button>
+      <button id="openWallet" hidden type="button">Set up wallet</button>
     </header>
-    <section id="welcome" aria-labelledby="welcomeTitle">
+    <section id="walletIntro" aria-labelledby="walletHeading">
+      <div class="chat-heading">
+        <button class="bird portrait" aria-label="Animate the wallet sparrow"><span></span></button>
+        <div><h1 id="walletHeading">Your purchasing wallet</h1><p>Arc Testnet</p></div>
+      </div>
+      <div id="walletControls">
+        <p role="status">Loading wallet setup…</p>
+        <output aria-label="Wallet address" hidden></output>
+        <div class="actions" hidden>
+          <button data-register class="primary">Create passkey wallet</button>
+          <button data-login>Use existing passkey</button>
+        </div>
+        <button data-retry hidden>Retry wallet setup</button>
+        <p class="hint">Practice orders use a separate demo balance.</p>
+      </div>
+      <button id="continueSetup" type="button">Continue with demo balance</button>
+    </section>
+    <section hidden id="welcome" aria-labelledby="welcomeTitle">
       <div class="chat-heading">
         <button class="bird portrait" aria-label="Animate the copper-winged sparrow"><span></span></button>
         <div><h1 id="welcomeTitle">Plan an order</h1><p>With your AI purchasing helper</p></div>
@@ -46,13 +63,6 @@
     </nav>
     <dialog id="walletPanel" aria-labelledby="walletTitle">
       <h2 id="walletTitle">Your Arc Testnet wallet</h2>
-      <p role="status"></p>
-      <output aria-label="Wallet address" hidden></output>
-      <div class="actions" hidden>
-        <button data-register class="primary">Create passkey wallet</button>
-        <button data-login>Use existing passkey</button>
-      </div>
-      <p class="hint">Purchasing uses a separate demo balance.</p>
       <button data-dismiss>Close</button>
     </dialog>
     <dialog id="editor">
