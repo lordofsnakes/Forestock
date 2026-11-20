@@ -65,7 +65,11 @@ export default async function chat(req, res) {
     if (!upstream.ok) {
       const detail = await upstream.json().catch(() => ({}));
       console.warn("Chat gateway unavailable", upstream.status, detail.error?.code || detail.error?.type);
-      return res.status(503).json({ error: "AI chat is temporarily unavailable.", gatewayStatus: upstream.status });
+      const verification = [detail.error?.code, detail.error?.type].includes("customer_verification_required");
+      return res.status(503).json({
+        error: "AI chat is temporarily unavailable.", gatewayStatus: upstream.status,
+        ...(verification && { code: "gateway_verification_required" }),
+      });
     }
     const result = JSON.parse((await upstream.json()).choices[0].message.content);
     if (!shortString(result.reply, 1200) || !validDraft(result.draft, catalog)) throw Error();

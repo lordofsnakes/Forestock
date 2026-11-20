@@ -44,3 +44,13 @@ Run `npm ci` and `npm run test:all` with Chrome, Node 22+ and Foundry on the mac
 Typed messages go to the server-side `/api/chat` endpoint, which uses Google Gemini 2.5 Flash-Lite through Vercel AI Gateway. The model receives recent conversation turns, the material catalog and the current draft. Buyers can ask questions or revise terms before selecting **Review order**. Tap suggestions also work during an AI outage. The separate Gemini Prediction Markets feed supplies the purchasing signal.
 
 On Vercel the function uses deployment OIDC. For local development, set `AI_GATEWAY_API_KEY` in the server environment before running `npm run dev`. Optionally set `AI_GATEWAY_MODEL` to a Gateway model supporting JSON output.
+
+### Buyer dashboard and passkey wallet
+
+Orders lists all watching and held needs. Select a row to view its forecast, edit its terms, or settle that need. **Add need** creates another order under the same weekly allowance. Completed needs retain their receipts. Existing single-order browser workspaces migrate on their next visit.
+
+**Set up wallet** is available from onboarding and the dashboard. In Circle Console, create a testnet Modular Wallets web Client Key bound to `forestock-brown.vercel.app`, and register the same passkey domain. Set `CIRCLE_WALLET_CLIENT_KEY` on Vercel and redeploy. For local development configure a key and passkey domain for localhost and set the variable before `npm run dev`. The build publishes the browser client key. Keep server API keys separate.
+
+A buyer taps Create passkey wallet and approves their device prompt. The SDK obtains the smart-account address on Arc Testnet. Use existing passkey restores access. Only the public address is cached on this device. Wallet creation neither funds the escrow nor grants agent spending authority. The onchain account can deploy with its first user operation.
+
+CCTP can fund a buyer's Arc Testnet wallet from a supported source such as Base Sepolia. A funding flow would burn test USDC on the source chain, obtain Circle's attestation, mint on Arc to the buyer's address, and verify the receipt. Depositing into Forestock escrow and authorizing a need are subsequent actions. Bridging is outside the current implementation.

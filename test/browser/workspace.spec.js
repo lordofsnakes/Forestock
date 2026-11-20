@@ -220,3 +220,32 @@ test("AI outage keeps the message available for retry and quick replies still wo
   await finishSetup(page);
   await expect(page.locator(".order-summary")).toContainText("100 lb");
 });
+
+test("multiple needs survive a reload and settle against one shared balance", async ({ page }) => {
+  await start(page);
+  await button(page, "Add need").click();
+  await page.locator("#editor select").selectOption("NGAS");
+  await page.locator("#editor [name=qty]").fill("1");
+  await button(page, "Save need").click();
+  await expect(page.locator(".need-entry")).toHaveCount(2);
+  async function hold() {
+    const cutoff = button(page, "Run at cutoff");
+    if (!await cutoff.isVisible()) await page.getByText("Try deadline scenario").click();
+    await cutoff.click();
+  }
+  await hold();
+  await page.getByRole("button", { name: /Copper · 100 lb/ }).click();
+  await hold();
+  await button(page, "Budget").click();
+  const held = 58000 + data.assets.find(a => a.series === "NGAS").price;
+  await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText((held / 100).toFixed(2));
+  await page.reload();
+  await finishSetup(page);
+  await button(page, "Decline").click();
+  await expect(page.locator(".needs-overview > .need-entry")).toHaveCount(1);
+  await page.getByRole("button", { name: /Natural Gas · 1 MMBtu/ }).click();
+  await button(page, "Accept order").click();
+  await expect(page.getByText("No active needs.", { exact: true })).toBeVisible();
+  await button(page, "Budget").click();
+  await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText("$0.00");
+});

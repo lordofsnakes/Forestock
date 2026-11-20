@@ -47,22 +47,38 @@ let s = saved || initial(),
   tab = "Orders",
   market,
   replay = false;
+// Upgrade the original single-need workspace without rebooking its holds.
+if (!s.orders) {
+  const id = crypto.randomUUID();
+  s.orders = [{ ...s.order, id }];
+  s.selectedId = id;
+  delete s.order;
+}
+function order() {
+  return s.orders.find(o => o.id === s.selectedId) || s.orders[0];
+}
+let addingNeed = false;
 const welcome = document.querySelector("#welcome");
 let inSetup = true;
 function finishSetup(asset, quantity, allowance) {
-  if (s.order.status === "Watching") {
-    if (!saved || asset.series !== current().series) {
-      s.order.asset = compact(asset);
-      s.order.cap = Math.ceil(asset.price * 1.035);
+  if (order().status === "Watching") {
+    if (saved && asset.series !== current().series) {
+      const need = { ...initial().order, asset: compact(asset), id: crypto.randomUUID() };
+      s.orders.push(need);
+      s.selectedId = need.id;
+      need.cap = Math.ceil(asset.price * 1.035);
+    } else if (!saved) {
+      order().asset = compact(asset);
+      order().cap = Math.ceil(asset.price * 1.035);
     }
-    s.order.qty = quantity;
+    order().qty = quantity;
   }
   syncMarket();
   s.limit = Math.round(allowance * 100);
   inSetup = false;
   record(
     "Workspace opened",
-    s.order.qty +
+    order().qty +
       " " +
       current().unit +
       " of " +
@@ -102,7 +118,7 @@ const copper = {
 };
 let assets = [copper];
 function current() {
-  return s.order.asset || copper;
+  return order().asset || copper;
 }
 function selected(f) {
   return assets.find((a) => a.series === f.elements.asset.value) || current();
@@ -130,8 +146,8 @@ form.elements.asset.addEventListener("change", () => {
   form.cap.value = ((selected(form).price / 100) * 1.03).toFixed(2);
 });
 const chat = startChat({
-  choices, material: current(), quantity: s.order.qty, allowance: s.limit / 100,
-  status: s.order.status, returning: Boolean(saved), finish: finishSetup,
+  choices, material: current(), quantity: order().qty, allowance: s.limit / 100,
+  status: order().status, returning: Boolean(saved), finish: finishSetup,
 });
 fillPickers();
 function save() {
@@ -165,11 +181,26 @@ function chainReceipts() {
 }
 function assessment(t = now()) {
   return evaluate(
-    s,
+    { ...s, order: order() },
     market,
     t,
     replay && market ? Date.parse(market.observed) : now(),
   );
+}
+function needsOverview() {
+  const active = s.orders.filter(o => o.status === "Watching" || o.status === "Held");
+  const closed = s.orders.filter(o => o.status === "Paid" || o.status === "Refunded");
+  function entry(o) {
+    const asset = o.asset || copper;
+    return '<button class="need-entry" data-need="' + esc(o.id) + '" aria-pressed="' +
+      (o.id === order().id) + '"><span><strong>' + esc(asset.name) + '</strong> · ' +
+      o.qty + ' ' + esc(asset.unit) + '</span><span>' + esc(o.status) + '</span></button>';
+  }
+  return '<section class="needs-overview"><div class="needs-heading"><h1>Active needs</h1>' +
+    btn("Add need", "add") + '</div>' +
+    (active.map(entry).join("") || '<p>No active needs.</p>') +
+    (closed.length ? '<details><summary>Completed needs (' + closed.length + ')</summary>' +
+      closed.map(entry).join("") + '</details>' : '') + '</section>';
 }
 function render() {
   if (inSetup) return;
@@ -179,7 +210,7 @@ function render() {
   refresh(s, now());
   save();
   const { price, name, unit, premium } = current();
-  const o = s.order,
+  const o = order(),
     total = o.qty * price;
   for (const b of document.querySelectorAll("[data-tab]"))
     b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
@@ -188,7 +219,7 @@ function render() {
       open = o.status === "Watching",
       held = o.status === "Held";
     el.innerHTML =
-      '<section class="order-status"><div class="order-heading"><div><p class="hint">Purchase order</p><h1>' +
+      needsOverview() + '<section class="order-status"><div class="order-heading"><div><p class="hint">' + esc(name) + ' order</p><h2>' +
       (open
         ? ({Buy:"Ready to order",Wait:"Watching the market",Blocked:"Order needs attention"}[d.kind])
         : held
@@ -196,7 +227,7 @@ function render() {
           : o.status === "Paid"
             ? "Supplier receipt"
             : "Funds returned") +
-      '</h1></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></div><p>' +
+      '</h2></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></div><p>' +
       esc(
         open
           ? d.reason
@@ -211,7 +242,7 @@ function render() {
         ? btn("Run decision", "run", true) + btn("Edit need", "edit")
         : held
           ? btn("Decline", "decline") + btn("Accept order", "accept", true)
-          : btn("New material need", "edit", true)) +
+          : btn("New material need", "add", true)) +
       "</div>" +
       (open
         ? "<details><summary>Try deadline scenario</summary><p>Preview the decision at the last safe ordering time.</p>" +
@@ -265,7 +296,7 @@ function render() {
       row("Limit", money(s.limit)) +
       row("Committed this week", money(s.used)) +
       row("Uncommitted balance", money(s.balance)) +
-      row("Funds held", money(o.status === "Held" ? total : 0)) +
+      row("Funds held", money(s.orders.reduce((sum, need) => sum + (need.status === "Held" ? need.qty * (need.asset || copper).price : 0), 0))) +
       row("Resets", dt((s.week + 1) * 7 * day - 3 * day)) +
       '<progress max="' +
       Math.max(1, s.limit) +
@@ -308,6 +339,14 @@ document.addEventListener("click", (e) => {
     animateBird(b);
     return;
   }
+  if (b.dataset.need) {
+    s.selectedId = b.dataset.need;
+    syncMarket();
+    fillPickers();
+    render();
+    el.querySelector(".order-status").scrollIntoView({ block: "start" });
+    return;
+  }
   if (!b.dataset.action && !b.dataset.tab && !b.hasAttribute("data-close"))
     return;
   if (b.dataset.tab) {
@@ -322,15 +361,17 @@ document.addEventListener("click", (e) => {
   }
   const { price } = current();
   const a = b.dataset.action,
-    o = s.order;
+    o = order();
   refresh(s, now());
-  if (a === "edit" && o.status !== "Held") {
+  if (a === "add" || (a === "edit" && o.status === "Watching")) {
+    addingNeed = a === "add";
+    const template = addingNeed ? initial().order : o;
     form.elements.asset.value = current().series;
     updatePicker(form);
-    form.qty.value = o.qty;
-    form.cap.value = o.cap / 100;
-    form.notes.value = o.notes;
-    const local = new Date(Math.max(o.due, now() + day));
+    form.qty.value = template.qty;
+    form.cap.value = addingNeed ? Math.ceil(current().price * 1.035) / 100 : o.cap / 100;
+    form.notes.value = template.notes;
+    const local = new Date(Math.max(template.due, now() + day));
     form.due.value = new Date(+local - local.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
@@ -380,7 +421,8 @@ document.addEventListener("click", (e) => {
 });
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-  s.order = {
+  const need = {
+    id: addingNeed ? crypto.randomUUID() : order().id,
     asset: compact(selected(form)),
     qty: Number(form.qty.value),
     cap: Math.round(Number(form.cap.value) * 100),
@@ -388,10 +430,13 @@ form.addEventListener("submit", (e) => {
     notes: form.notes.value,
     status: "Watching",
   };
+  if (addingNeed) s.orders.push(need);
+  else s.orders[s.orders.indexOf(order())] = need;
+  s.selectedId = need.id;
   syncMarket();
   record(
     "Material need saved",
-    s.order.qty + " " + current().unit + " of " + current().name + "",
+    order().qty + " " + current().unit + " of " + current().name + "",
   );
   dialog.close();
   render();

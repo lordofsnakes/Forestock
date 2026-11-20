@@ -111,15 +111,17 @@ export function startChat({ choices, material, quantity, allowance, status, retu
           catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
         }),
       });
-      if (!response.ok) throw Error();
       const result = await response.json();
+      if (!response.ok) throw Error(result.code || "unavailable");
       if (request !== pending) return;
       draft = result.draft;
       say(result.reply);
-    } catch {
+    } catch (error) {
       if (request !== pending) return;
       history.pop();
-      say("I couldn’t reach AI chat. Send your message again or use a suggested reply.");
+      say(error.message === "gateway_verification_required"
+        ? "AI chat is waiting for Forestock’s Vercel account verification. You can use a suggested reply to continue."
+        : "I couldn’t reach AI chat. Send your message again or use a suggested reply.");
       if (!input.value) input.value = text;
     } finally {
       if (request === pending) {

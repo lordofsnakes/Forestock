@@ -21,6 +21,7 @@
           <span></span></button
         >Forestock
       </div>
+      <button id="openWallet" type="button">Set up wallet</button>
     </header>
     <section id="welcome" aria-labelledby="welcomeTitle">
       <div class="chat-heading">
@@ -43,6 +44,17 @@
       ><button data-tab="Budget">Budget</button
       ><button data-tab="Activity">Activity</button>
     </nav>
+    <dialog id="walletPanel" aria-labelledby="walletTitle">
+      <h2 id="walletTitle">Your Arc Testnet wallet</h2>
+      <p role="status"></p>
+      <output aria-label="Wallet address" hidden></output>
+      <div class="actions" hidden>
+        <button data-register class="primary">Create passkey wallet</button>
+        <button data-login>Use existing passkey</button>
+      </div>
+      <p class="hint">Purchasing uses a separate demo balance.</p>
+      <button data-dismiss>Close</button>
+    </dialog>
     <dialog id="editor">
       <form id="orderForm">
         <h2>Material need</h2>
@@ -77,6 +89,7 @@
         </div>
       </form>
     </dialog>
+    <script type="module" src="/wallet.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
