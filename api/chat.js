@@ -97,6 +97,11 @@ export default async function chat(req, res) {
       const exact = catalog.find(asset => asset.name.toLowerCase() === line.label.toLowerCase());
       if (!line.series && exact) line.series = exact.series;
     }
+    // Some models put every requested item in additional and leave an empty first row.
+    if (!locked && !proposed.series && !proposed.label && proposed.quantity == null && proposed.additional?.[0]?.series) {
+      const { allowance, additional } = proposed;
+      Object.assign(proposed, additional.shift(), { allowance, additional });
+    }
     const clarifications = [];
     for (const amount of smallAmounts) {
       const line = [proposed, ...(proposed.additional || [])].find(line => line.series === amount.series);
@@ -110,13 +115,12 @@ export default async function chat(req, res) {
         line.dateNote = amount.dateNote;
         line.dueDate = null;
       }
-      if (!result.reply.includes(amount.requested) || !result.reply.includes(amount.minimum)) {
-        clarifications.push(amount.requested + " of " + amount.name + " is below the " + amount.minimum + " minimum.");
-      }
+      clarifications.push("I’ve noted " + amount.requested + " of " + amount.name +
+        (amount.dateNote ? " for the " + amount.dateNote : "") + ". The smallest order for " + amount.name + " is " + amount.minimum + ".");
     }
     if (!validDraft(proposed, catalog)) throw Error();
     if (clarifications.length) {
-      const others = (proposed.additional || []).map(line => line.label);
+      const others = (proposed.additional || []).filter(line => !smallAmounts.some(amount => amount.series === line.series)).map(line => line.label);
       result.reply = clarifications.join(" ") + (others.length ? " I also have " + others.join(" and ") + " on your list." : "") +
         " What quantity should I use, or would you like to skip that material?";
     }
