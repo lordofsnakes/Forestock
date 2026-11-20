@@ -13,6 +13,13 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet, foundry } from "viem/chains";
 import { liveAbi as abi } from "../lib/live-abi.js";
+import { routeAbi } from "../lib/routed-abi.js";
+import {
+  forwardingFee,
+  requiredFee,
+  verifiedBook,
+} from "../lib/supplier-offers.js";
+import { totalCents } from "../public/decision.js";
 import { liveDecision } from "../lib/live-decision.js";
 
 const local = process.argv.includes("--local");
@@ -25,140 +32,212 @@ const config = JSON.parse(
     local ? path.join(dir, "live.json") : "public/arc-network.json",
   ),
 );
-const address = config.escrow;
-const transport = http(
-  local ? process.env.FORESTOCK_LOCAL_RPC : "https://rpc.testnet.arc.network",
-);
-const client = createPublicClient({ chain, transport });
-if ((await client.getChainId()) !== chain.id || !address)
-  throw Error("Unexpected escrow network.");
-const read = (functionName, args = []) =>
-  client.readContract({ address, abi, functionName, args });
-const signer = (name) =>
-  createWalletClient({
-    chain,
-    transport,
-    account: privateKeyToAccount(
-      fs.readFileSync(path.join(dir, name + ".key"), "utf8").trim(),
-    ),
-  });
-const agent = signer("agent"),
-  supplier = signer("supplier");
-for (const [name, wallet] of [
-  ["agent", agent],
-  ["supplier", supplier],
-]) {
-  if ((await read(name)).toLowerCase() !== wallet.account.address.toLowerCase())
-    throw Error("Incorrect " + name + " signer.");
-}
-const catalog = JSON.parse(fs.readFileSync("public/commodities.json")).assets;
-const file = path.join(dir, "live-" + address + ".json");
-let state = fs.existsSync(file)
-  ? JSON.parse(fs.readFileSync(file))
-  : { nextBlock: config.block, pending: [] };
-function save() {
-  fs.writeFileSync(file + ".tmp", JSON.stringify(state), { mode: 0o600 });
-  fs.renameSync(file + ".tmp", file);
-}
-async function write(wallet, functionName, args) {
-  const { request } = await client.simulateContract({
-    address,
-    abi,
-    functionName,
-    args,
-    account: wallet.account,
-  });
-  const hash = await wallet.writeContract(request);
-  const receipt = await client.waitForTransactionReceipt({ hash });
-  if (receipt.status !== "success") throw Error("Reverted " + hash);
-  console.log(functionName, args[0], hash);
-}
-async function tick() {
-  const head = await client.getBlock({ blockTag: "latest" });
-  while (BigInt(state.nextBlock) <= head.number) {
-    const fromBlock = BigInt(state.nextBlock);
-    const toBlock =
-      head.number < fromBlock + 999n ? head.number : fromBlock + 999n;
-    const plans = await client.getContractEvents({
+async function watcher(config, routed) {
+  const address = config.escrow;
+  const transport = http(
+    local ? process.env.FORESTOCK_LOCAL_RPC : "https://rpc.testnet.arc.network",
+  );
+  const client = createPublicClient({ chain, transport });
+  if ((await client.getChainId()) !== chain.id || !address)
+    throw Error("Unexpected escrow network.");
+  const read = (functionName, args = []) =>
+    client.readContract({ address, abi, functionName, args });
+  const signer = (name) =>
+    createWalletClient({
+      chain,
+      transport,
+      account: privateKeyToAccount(
+        fs.readFileSync(path.join(dir, name + ".key"), "utf8").trim(),
+      ),
+    });
+  const agent = signer("agent"),
+    supplier = signer("supplier");
+  for (const [name, wallet] of [
+    ["agent", agent],
+    ["supplier", supplier],
+  ]) {
+    if (
+      (await read(name)).toLowerCase() !== wallet.account.address.toLowerCase()
+    )
+      throw Error("Incorrect " + name + " signer.");
+  }
+  const catalog = JSON.parse(fs.readFileSync("public/commodities.json")).assets;
+  const book = routed
+    ? await verifiedBook(
+        JSON.parse(fs.readFileSync("public/base-offers.json")),
+        await client.readContract({
+          address,
+          abi: routeAbi,
+          functionName: "baseSupplier",
+        }),
+        address,
+      )
+    : null;
+  const file = path.join(dir, "live-" + address + ".json");
+  let state = fs.existsSync(file)
+    ? JSON.parse(fs.readFileSync(file))
+    : { nextBlock: config.block, pending: [] };
+  function save() {
+    fs.writeFileSync(file + ".tmp", JSON.stringify(state), { mode: 0o600 });
+    fs.renameSync(file + ".tmp", file);
+  }
+  async function write(wallet, functionName, args) {
+    const { request } = await client.simulateContract({
       address,
       abi,
-      eventName: "Planned",
-      fromBlock,
-      toBlock,
+      functionName,
+      args,
+      account: wallet.account,
     });
-    state.pending = [
-      ...new Set([...state.pending, ...plans.map((e) => e.args.id)]),
-    ];
-    state.nextBlock = Number(toBlock + 1n);
-    save();
+    // A project-funded rehearsal can carry a separate total gas allowance.
+    const ledger = path.join(dir, "rehearsal-gas-" + args[0] + ".json");
+    if (fs.existsSync(ledger)) {
+      const remaining = BigInt(JSON.parse(fs.readFileSync(ledger)).remaining);
+      const gas = ((await client.estimateContractGas(request)) * 12n) / 10n;
+      const fees = await client.estimateFeesPerGas();
+      const bound = gas * fees.maxFeePerGas;
+      if (bound > remaining)
+        throw Error("Project rehearsal gas allowance exhausted.");
+      fs.writeFileSync(
+        ledger + ".tmp",
+        JSON.stringify({ remaining: String(remaining - bound) }),
+        { mode: 0o600 },
+      );
+      fs.renameSync(ledger + ".tmp", ledger);
+      Object.assign(request, fees, { gas });
+    }
+    const hash = await wallet.writeContract(request);
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw Error("Reverted " + hash);
+    console.log(functionName, args[0], hash);
   }
-  if (!state.pending.length) return;
-  let quotes = [];
-  if (!local) {
-    try {
-      const r = await fetch("https://forestock-brown.vercel.app/api/market", {
-        signal: AbortSignal.timeout(6000),
+  async function tick() {
+    const head = await client.getBlock({ blockTag: "latest" });
+    while (BigInt(state.nextBlock) <= head.number) {
+      const fromBlock = BigInt(state.nextBlock);
+      const toBlock =
+        head.number < fromBlock + 999n ? head.number : fromBlock + 999n;
+      const plans = await client.getContractEvents({
+        address,
+        abi,
+        eventName: "Planned",
+        fromBlock,
+        toBlock,
       });
-      if (r.ok) quotes = (await r.json()).assets;
-    } catch {}
-  }
-  for (const id of [...state.pending]) {
-    try {
-      const o = await read("order", [id]);
-      if (o.status === 1 && o.orderBy >= head.timestamp) {
-        const series = hexToString(o.series, { size: 32 });
-        const live = quotes.find((a) => a.series === series),
-          archived = catalog.find((a) => a.series === series);
-        const [free, limit, spent] = await Promise.all([
-          read("free", [o.buyer]),
-          read("weeklyLimit", [o.buyer]),
-          read("committed", [o.buyer, (head.timestamp + 259200n) / 604800n]),
-        ]);
-        const asset = archived || live;
-        const d = liveDecision(
-          o,
-          { free, limit, spent },
-          asset,
-          live?.market,
-          archived?.market,
-          Number(head.timestamp) * 1000,
-        );
-        if (d.kind === "Buy")
-          await write(agent, "hold", [
-            id,
-            asset.price,
-            keccak256(
-              toHex(
-                JSON.stringify({
-                  reason: d.reason,
-                  observed: d.observed,
-                  quote: d.contract,
-                }),
-              ),
-            ),
-            d.recorded,
-            o.threshold,
-          ]);
-        continue;
-      }
-      if (o.status === 2)
-        await write(supplier, "settle", [
-          id,
-          head.timestamp < o.holdTime + 3600n,
-        ]);
-      state.pending = state.pending.filter((value) => value !== id);
+      state.pending = [
+        ...new Set([...state.pending, ...plans.map((e) => e.args.id)]),
+      ];
+      state.nextBlock = Number(toBlock + 1n);
       save();
-    } catch (error) {
-      console.warn(id, error.shortMessage || error.message);
+    }
+    if (!state.pending.length) return;
+    let quotes = [];
+    if (!local) {
+      try {
+        const r = await fetch("https://forestock-brown.vercel.app/api/market", {
+          signal: AbortSignal.timeout(6000),
+        });
+        if (r.ok) quotes = (await r.json()).assets;
+      } catch {}
+    }
+    let fee;
+    for (const id of [...state.pending]) {
+      try {
+        const o = await read("order", [id]);
+        let baseUnit = 0,
+          feeCap = 0n;
+        if (routed && (o.status === 1 || o.status === 2))
+          [baseUnit, feeCap] = await client.readContract({
+            address,
+            abi: routeAbi,
+            functionName: "baseOffer",
+            args: [id],
+          });
+        if (
+          baseUnit &&
+          ((o.status === 1 && head.timestamp <= o.orderBy) ||
+            (o.status === 2 && head.timestamp < o.holdTime + 3600n))
+        ) {
+          fee ??= await forwardingFee();
+          const quantity = o.quantityMilli / 1000;
+          const gross = totalCents(quantity, baseUnit) * 10000;
+          if (requiredFee(gross, fee) > Number(feeCap)) continue;
+          const series = hexToString(o.series, { size: 32 });
+          if (
+            o.status === 1 &&
+            (!book.unitCents[series] ||
+              Number(head.timestamp) > book.expires ||
+              quantity > book.stock ||
+              gross - Number(feeCap) <
+                totalCents(quantity, book.unitCents[series]) * 10000)
+          )
+            continue;
+        }
+        if (o.status === 1 && o.orderBy >= head.timestamp) {
+          const series = hexToString(o.series, { size: 32 });
+          const live = quotes.find((a) => a.series === series),
+            archived = catalog.find((a) => a.series === series);
+          const [free, limit, spent] = await Promise.all([
+            read("free", [o.buyer]),
+            read("weeklyLimit", [o.buyer]),
+            read("committed", [o.buyer, (head.timestamp + 259200n) / 604800n]),
+          ]);
+          const reference = archived || live;
+          const asset =
+            reference && baseUnit
+              ? { ...reference, price: baseUnit }
+              : reference;
+          const d = liveDecision(
+            o,
+            { free, limit, spent },
+            asset,
+            live?.market,
+            archived?.market,
+            Number(head.timestamp) * 1000,
+          );
+          if (d.kind === "Buy")
+            await write(agent, "hold", [
+              id,
+              asset.price,
+              keccak256(
+                toHex(
+                  JSON.stringify({
+                    reason: d.reason,
+                    observed: d.observed,
+                    quote: d.contract,
+                  }),
+                ),
+              ),
+              d.recorded,
+              o.threshold,
+            ]);
+          continue;
+        }
+        if (o.status === 2)
+          await write(supplier, "settle", [
+            id,
+            head.timestamp < o.holdTime + 3600n,
+          ]);
+        state.pending = state.pending.filter((value) => value !== id);
+        save();
+      } catch (error) {
+        console.warn(id, error.shortMessage || error.message);
+      }
     }
   }
+  return tick;
 }
+const watchers = [await watcher(config, false)];
+if (config.routed) watchers.push(await watcher(config.routed, true));
 do {
-  try {
-    await tick();
-  } catch (error) {
-    console.warn(error.shortMessage || error.message);
-    if (local) throw error;
+  // Both escrows share signers. Serialize writes to preserve nonce ordering.
+  for (const tick of watchers) {
+    try {
+      await tick();
+    } catch (error) {
+      console.warn(error.shortMessage || error.message);
+      if (local) throw error;
+    }
   }
   if (process.argv.includes("--once")) break;
   await new Promise((resolve) => setTimeout(resolve, 10000));

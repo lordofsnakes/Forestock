@@ -28,7 +28,7 @@ try {
   await page.getByRole("button", { name: "600 USDC", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   const threshold = page.getByRole("button", { name: /Early-order threshold/ });
-  assert.match(await threshold.innerText(), /50%/);
+  assert.match(await threshold.innerText(), /10%/);
   await threshold.click();
   await page.getByLabel("Minimum market probability").fill("40");
   await page.getByRole("button", { name: "Save threshold" }).click();

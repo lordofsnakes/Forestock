@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 /// Native Arc test USDC uses 18 decimals. Each buyer signs their own terms.
 contract ForestockLive {
-    enum Status { Missing, Watching, Held, Paid, Refunded, Cancelled }
+    enum Status { Missing, Watching, Held, Paid, Refunded, Cancelled, InTransit }
     struct Order {
         address buyer;
         bytes32 series;
@@ -23,7 +23,7 @@ contract ForestockLive {
     mapping(address => uint256) public free;
     mapping(address => uint256) public weeklyLimit;
     mapping(address => mapping(uint256 => uint256)) public committed;
-    mapping(bytes32 => Order) private orders;
+    mapping(bytes32 => Order) internal orders;
     mapping(address => bytes32[]) private buyerOrders;
     event Planned(bytes32 indexed id, address indexed buyer);
     event Held(bytes32 indexed id, uint256 amount, bytes32 evidence, bool recorded);
@@ -84,6 +84,7 @@ contract ForestockLive {
         require(msg.sender == agent && o.status == Status.Watching && block.timestamp <= o.orderBy, "invalid hold");
         require(o.threshold == expectedThreshold && (!recorded || o.allowRecording), "terms changed");
         require(unitCents > 0 && unitCents <= o.capCents && evidence != 0, "quote");
+        validateOffer(id, unitCents);
         uint256 cents = (uint256(o.quantityMilli) * unitCents + 500) / 1000;
         uint256 amount = (cents == 0 ? 1 : cents) * 1e16;
         uint256 p = week(block.timestamp);
@@ -103,7 +104,7 @@ contract ForestockLive {
         if (accept) {
             require(!expired, "acceptance expired");
             o.status = Status.Paid;
-            transferTo(supplier, o.amount);
+            paySupplier(id, o);
         } else {
             o.status = Status.Refunded;
             free[o.buyer] += o.amount;
@@ -112,6 +113,8 @@ contract ForestockLive {
         o.settlementBlock = uint64(block.number);
         emit Settled(id, o.status);
     }
+    function validateOffer(bytes32, uint32) internal view virtual {}
+    function paySupplier(bytes32, Order storage o) internal virtual { transferTo(supplier, o.amount); }
     function transferTo(address to, uint256 amount) private {
         (bool success,) = to.call{value: amount}("");
         require(success, "transfer failed");

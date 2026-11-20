@@ -13,9 +13,12 @@ import {
 import { flyToScreen, hop, landOnArcReview } from "../public/onboarding-motion.js";
 import { sparrowSpeech } from "../public/sparrow-speech.js";
 import { arcTestnet } from "viem/chains";
-import { liveAbi as abi } from "../lib/live-abi.js";
+import { baseQuote, chooseOffer, requiredFee, verifiedBook, forwardingFee } from "../lib/supplier-offers.js";
+import { destinationReceipt } from "../lib/bridge-receipt.js";
+import { routeAbi } from "../lib/routed-abi.js";
+import { liveAbi } from "../lib/live-abi.js";
 import { liveDecision } from "../lib/live-decision.js";
-import { currentQuote, midpointPercent, totalCents } from "../public/decision.js";
+import { currentQuote, defaultThreshold, midpointPercent, totalCents } from "../public/decision.js";
 import {
   connectWallet, hasWalletCredential, sendEscrowCalls,
   waitEscrowOperation,
@@ -23,6 +26,11 @@ import {
 
 import { escapeText as escape, filterControls, populateFilters, matchesOrder, purchaseMark, marketSection, showMarket, syncAmountSlider, thresholdHint } from "../public/workspace-controls.js";
 
+const abi = [...liveAbi,...routeAbi];
+let routed, book, fee, feeTime = 0, baseSupplier;
+const destination = new Map();
+const burnIds = new Map();
+const routeKey = "forestock.routed." + localStorage.getItem("forestock.arcWallet");
 const $ = (id) => document.getElementById(id);
 const buyer = localStorage.getItem("forestock.arcWallet");
 const client = createPublicClient({
@@ -68,7 +76,7 @@ function planReceipt(id) {
     : "";
 }
 const orders = new Map();
-const statusLabels = ["", "Watching", "Funds held", "Purchased", "Refunded", "Cancelled"];
+const statusLabels = ["", "Watching", "Funds held", "Purchased", "Refunded", "Cancelled", "Payment in transit"];
 const filter = { material: "", status: "" };
 let marketSeries, budgetEdited = false;
 $("arcFilters").innerHTML = filterControls();
@@ -157,7 +165,7 @@ const call = (functionName, args, value = 0n) => ({
   data: encodeFunctionData({ abi, functionName, args }),
 });
 
-async function blockReceipt(id, block, eventName) {
+async function blockReceipt(id, block, eventName, isBurn = false) {
   if (!block) return "";
   const k = id + eventName;
   if (!receipts.has(k)) {
@@ -174,14 +182,39 @@ async function blockReceipt(id, block, eventName) {
         k,
         link(
           logs[0].transactionHash,
-          eventName === "Held" ? "Escrow hold" : "Settlement",
+          eventName === "Held" ? "Escrow hold" : isBurn ? "Arc burn" : "Settlement",
         ) + (logs[0].args.recorded ? " · recorded forecast" : ""),
       );
   }
   return receipts.get(k) || "";
 }
+async function updateFee() {
+  try { fee = await forwardingFee(); } catch { fee = null; }
+  feeTime = Date.now();
+}
+function offerFor(line) {
+  return chooseOffer(line, book, fee, Math.floor(Date.now()/1000));
+}
+async function bridgeStatus(id, o) {
+  if (!burnIds.has(id)) {
+    const [burn] = await client.getContractEvents({address,abi,eventName:"Burned",args:{id},fromBlock:o.settlementBlock,toBlock:o.settlementBlock});
+    if (!burn) return;
+    burnIds.set(id,burn);
+  }
+  const prior = destination.get(id);
+  if (prior?.hash || prior?.checked > Date.now()-15000) return prior?.hash;
+  const burn = burnIds.get(id);
+  const entry = {checked:Date.now()};
+  destination.set(id,entry);
+  // Keep the order list responsive while Circle forwards and Base confirms.
+  destinationReceipt(burn.transactionHash, burn.args.recipient, burn.args.grossMicros-burn.args.maxFee)
+    .then(hash => { if(hash) entry.hash=hash; }).catch(()=>{});
+}
 const guide = sparrowSpeech($("review"), $("guideMessage"));
 let spoken, gasShortfall;
+$("approve").elements.threshold.value = defaultThreshold;
+const signedCutoff = (line, shortWindow, now) =>
+  shortWindow ? Math.min(line.orderBy, now + 120) : line.orderBy;
 function say(message) {
   if (message === spoken) return;
   spoken = message;
@@ -200,6 +233,10 @@ document.addEventListener("click", e => {
 function updateApproval() {
   if (!funds || !draft) return;
   const f = $("approve");
+  $("windowHint").hidden = !f.elements.shortWindow.checked;
+  for (const cutoff of $("lines").querySelectorAll("[data-cutoff]")) {
+    cutoff.textContent = f.elements.shortWindow.checked ? "Order within 2 min or by the original cutoff, whichever comes first" : "Order by " + date(cutoff.dataset.cutoff);
+  }
   const input = f.elements.deposit;
   const valid = input.validity.valid;
   const deposit = valid ? parseEther(input.value) : 0n;
@@ -210,7 +247,7 @@ function updateApproval() {
   $("authorize").disabled = !valid || needsFunds || working;
   $("fundingHelp").hidden = !needsFunds;
   $("depositSummary").textContent = valid ? amount(deposit) + " test USDC" : "Choose a deposit";
-  $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%" + (f.elements.recording.checked ? " · Dated forecast allowed" : "");
+  $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%" + (f.elements.recording.checked ? " · Dated forecast allowed" : "") + (f.elements.shortWindow.checked ? " · 2 min cutoff" : "");
   if (needsFunds) {
     $("fundingReason").textContent = "Your wallet has " + amount(funds.wallet) + " test USDC. " +
       (funds.wallet < deposit ? "The deposit needs " + amount(deposit) + ", plus the network fee." :
@@ -264,14 +301,21 @@ function showDraft() {
     " test USDC · Already in escrow " +
     amount(funds.free) +
     ".";
+  $("quoteSource").hidden = !routed;
+  if (routed) $("quoteSource").textContent = book && fee ? "Comparing delivered offers from the project’s Arc and Base Sepolia test suppliers. Forwarding is included." : "Showing the Arc offer while the Base supplier or forwarding quote is unavailable.";
   let cost = 0n;
   $("lines").innerHTML = draft.lines
     .map((line) => {
-      const cents = totalCents(line.quantity, line.price);
+      const offer = offerFor(line);
+      const cents = offer.cents;
       cost += BigInt(cents) * 10n ** 16n;
+      const alternative = routed && baseQuote(line,book,fee,Math.floor(Date.now()/1000));
+      const comparison = alternative ? '<details><summary>Compare supplier prices</summary><p>Arc ' + usd(totalCents(line.quantity,line.price)) +
+        ' · Base Sepolia ' + usd(alternative.cents) + ' including forwarding' +
+        (alternative.price>line.cap ? ' (above your price cap)' : '') + '</p></details>' : '';
       return '<li><div class="review-item"><strong>' + escape(line.name) + '</strong><b>' + usd(cents) +
         '</b></div><div class="review-item-meta"><span>' + escape(line.quantity + " " + line.unit) +
-        '</span><span>Order by ' + date(line.orderBy) + '</span></div></li>';
+        '</span>' + (routed ? '<span>' + offer.network + (offer.feeMicros ? ' · up to ' + (offer.feeMicros/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + comparison + '</li>';
     })
     .join("");
   $("priceCaps").innerHTML = draft.lines.map(line =>
@@ -290,7 +334,11 @@ async function orderCard(id, o) {
   const series = hexToString(o.series, { size: 32 });
   const live = liveAssets.find((a) => a.series === series);
   const archived = catalog.find((a) => a.series === series);
-  const asset = archived || live;
+  const reference = archived || live;
+  const [baseUnit, feeCap] = routed && (o.status === 1 || o.status === 2 || o.status === 6) ? await read("baseOffer",[id]) : [0];
+  const asset = baseUnit && reference ? {...reference,price:baseUnit} : reference;
+  const mint = o.status === 6 ? await bridgeStatus(id,o) : undefined;
+  const mintLink = mint ? '<a href="https://sepolia.basescan.org/tx/'+mint+'" target="_blank" rel="noreferrer">Base supplier receipt ↗</a>' : "";
   const status = [
     "",
     "Watching",
@@ -298,8 +346,9 @@ async function orderCard(id, o) {
     "Supplier paid",
     "Refunded",
     "Cancelled",
+    mint ? "Supplier paid on Base Sepolia" : "USDC in transit to Base Sepolia",
   ][o.status];
-  const assessment =
+  let assessment =
     o.status === 1
       ? liveDecision(
           o,
@@ -310,12 +359,19 @@ async function orderCard(id, o) {
           Date.now(),
         )
       : null;
+  if (baseUnit && o.status === 1 && Number(o.orderBy)*1000 >= Date.now()) {
+    const gross = totalCents(o.quantityMilli/1000,baseUnit)*10000;
+    if (!fee || requiredFee(gross,fee) > Number(feeCap))
+      assessment = {kind:"Wait",reason:fee ? "Waiting for Circle’s forwarding fee to fit your signed offer." : "Waiting for a forwarding fee from Circle."};
+    else if (!book?.unitCents[series] || book.expires*1000 < Date.now())
+      assessment = {kind:"Wait",reason:"Waiting for a valid supplier quote for your Base order."};
+  }
   orders.set(id, {
     o,
     asset,
     live: live?.market,
     recording: archived?.market,
-    assessment,
+    assessment, mintLink, status,
   });
   let body = assessment
     ? "<p>" +
@@ -341,12 +397,13 @@ async function orderCard(id, o) {
     id +
     '">Ask about this order</button></div>';
   const links = await Promise.all([
+    mintLink,
     planReceipt(id),
     blockReceipt(id, o.holdBlock, "Held"),
-    blockReceipt(id, o.settlementBlock, "Settled"),
+    blockReceipt(id, o.settlementBlock, "Settled", o.status === 6),
   ]);
   return (
-    '<article data-series="' + escape(series) + '" data-status="' + o.status + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
+    '<article data-series="' + escape(series) + '" data-status="' + (mint ? 3 : o.status) + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
     escape(asset?.name || series) +
     " · " +
     escape(status) +
@@ -356,7 +413,7 @@ async function orderCard(id, o) {
     escape(asset?.unit || "units") +
     (o.amount ? " · " + amount(o.amount) + " test USDC" : "") +
     "</p>" +
-    body +
+    (baseUnit && o.status < 6 ? "<p>Supplier payout on Base Sepolia · forwarding included</p>" : "") + body +
     links.filter(Boolean).join(" · ") +
     "</article>"
   );
@@ -389,6 +446,7 @@ async function refresh() {
     const walletCents = wallet / (10n ** 16n);
     syncAmountSlider($("capRange"), capField, Math.max(10, 2 * Number(formatEther(limit)), Number(capField.value), Number(formatEther(wallet + free))));
     syncAmountSlider($("depositRange"), depositField, Number(walletCents > 0n ? walletCents - 1n : 0n) / 100);
+    if (routed && !draft?.lines?.length && Date.now() - feeTime > 60000) await updateFee();
     showDraft();
     if (Date.now() - quoteTime > 60000) {
       quoteTime = Date.now();
@@ -418,11 +476,11 @@ async function refresh() {
       ids
         .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
         .map(id => {
-          const { o, asset } = orders.get(id);
+          const { o, asset, mintLink, status } = orders.get(id);
           const series = hexToString(o.series, {size: 32});
-          const links = [planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
-          return '<div class="receipt-line">' + (o.status === 3 ? purchaseMark(series) : "") +
-            '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + statusLabels[o.status] +
+          const links = [mintLink, planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
+          return '<div class="receipt-line">' + (o.status === 3 || mintLink ? purchaseMark(series) : "") +
+            '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + escape(o.status === 6 ? status : statusLabels[o.status]) +
             (links ? "<br>" + links : "") + "</div></div>";
         })
         .join("") ||
@@ -545,7 +603,7 @@ function terms(form) {
     parseEther(form.elements.deposit.value),
   );
 }
-$("approve").onsubmit = (e) => {
+$("approve").onsubmit = async (e) => {
   e.preventDefault();
   if (!draft || !funds) return;
   const f = e.target;
@@ -553,19 +611,29 @@ $("approve").onsubmit = (e) => {
     return notice(
       "This delivery date is too soon. Discard this draft and choose a later date.",
     );
+  if (routed && Date.now()-feeTime > 90000) {
+    const before = draft.lines.map(offerFor);
+    await updateFee();
+    if (JSON.stringify(before)!==JSON.stringify(draft.lines.map(offerFor))) {
+      showDraft(); return notice("Supplier pricing changed. Review the updated offer before authorizing.");
+    }
+  }
+  const now = Math.floor(Date.now() / 1000);
   const calls = [
     terms(f),
-    ...draft.lines.map((l) =>
-      call("plan", [
+    ...draft.lines.flatMap((l) => {
+      const offer = offerFor(l);
+      const plan = call("plan", [
         l.salt,
         stringToHex(l.series, { size: 32 }),
         Math.round(l.quantity * 1000),
         l.cap,
-        BigInt(l.orderBy),
+        BigInt(signedCutoff(l, f.elements.shortWindow.checked, now)),
         Number(f.elements.threshold.value),
         f.elements.recording.checked,
-      ]),
-    ),
+      ]);
+      return offer.feeMicros ? [plan,call("selectBase",[l.salt,offer.price,BigInt(offer.feeMicros)])] : [plan];
+    }),
   ];
   transact("plan", calls);
 };
@@ -602,7 +670,7 @@ $("orderList").onclick = (e) => {
     const name = asset?.name || series;
     const market = assessment?.recorded ? recording : live;
     const contract = assessment?.contract;
-    const status = ["", "watching", "held in escrow", "paid to the supplier", "refunded", "cancelled"][o.status];
+    const status = orders.get(b.dataset.chat).status;
     const quote = contract
       ? (assessment.recorded ? "Recorded" : "Live") + " forecast from " + date(Date.parse(assessment.observed) / 1000) +
         ". The market put the chance of " + name + " being at $" + contract.strike +
@@ -694,7 +762,24 @@ async function start() {
     (await client.getChainId()) !== network.chainId
   )
     throw Error("Arc escrow configuration is unavailable.");
-  address = network.escrow;
+  const desk = new URLSearchParams(location.search).get("desk");
+  if (desk === "routed" || desk === "original") sessionStorage.setItem(routeKey,desk);
+  routed = network.routed && sessionStorage.getItem(routeKey)==="routed";
+  address = routed ? network.routed.escrow : network.escrow;
+  if (network.routed) {
+    $("deskSwitch").hidden = false;
+    $("deskLink").href = routed ? "/arc.html?desk=original" : "/arc.html?desk=routed";
+    $("deskLink").textContent = routed ? "Return to Arc-only orders" : "Compare Arc and Base suppliers";
+    $("deskNote").textContent = routed ? "Cross-chain orders use a separate escrow and weekly cap." : "";
+  }
+  if (routed) {
+    baseSupplier = await read("baseSupplier");
+    try {
+      const data = await (await fetch("/base-offers.json")).json();
+      book = await verifiedBook(data,baseSupplier,address);
+    } catch { book = null; }
+    await updateFee();
+  }
   key = walletConfig.clientKey;
   if (localStorage.getItem(opKey())) await transact("resume", []);
   await refresh();

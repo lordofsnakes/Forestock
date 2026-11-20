@@ -1,7 +1,7 @@
 export const price = 580,
   premium = 12,
   day = 86400000;
-export const defaultThreshold = 50;
+export const defaultThreshold = 10;
 export const minimumQuantity = .001;
 export function defaultQuantity(asset) {
   return asset.price > 50000 ? minimumQuantity : .01;
@@ -12,7 +12,7 @@ export function totalCents(quantity, unitPrice) {
 }
 export function thresholdFor(order) {
   const value = order.threshold;
-  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : defaultThreshold;
+  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : 50;
 }
 export function week(t) {
   return Math.floor((t + 3 * day) / (7 * day));

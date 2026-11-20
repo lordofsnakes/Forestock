@@ -441,7 +441,7 @@ test("bottom tabs slide in the selected direction and rapid switches leave one a
 test("refresh explains a wait on Orders and a qualifying quote requires an explicit purchase", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const copper = structuredClone(data.assets.find(asset => asset.series === "COPPER"));
-  let bid = .40;
+  let bid = .04;
   await page.route("**/api/market", route => {
     copper.market = { ...copper.market, observed: new Date().toISOString(),
       expiry: new Date(Date.now() + 3600000).toISOString(),
@@ -453,7 +453,7 @@ test("refresh explains a wait on Orders and a qualifying quote requires an expli
   await button(page, "Refresh forecast").click();
   await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
   await expect(status.getByRole("status")).toContainText("still waiting");
-  await expect(status).toContainText("42%");
+  await expect(status).toContainText("6%");
   bid = .72;
   await button(page, "Refresh forecast").click();
   await expect(status.getByRole("status")).toContainText("Conditions met");
@@ -534,7 +534,7 @@ test("each need keeps its own threshold and selecting materials keeps the list i
 
   const setting = page.getByRole("button", { name: /Early-order threshold/ });
   const status = page.locator(".order-status");
-  await expect(setting).toContainText("50%");
+  await expect(setting).toContainText("10%");
   await expect(status).toContainText("5.5%");
   await expect(status.getByRole("heading")).toHaveText("Watching the market");
   await setting.click();
@@ -556,7 +556,7 @@ test("each need keeps its own threshold and selecting materials keeps the list i
   await page.evaluate(() => window.scrollTo(0, 64));
   const scroll = await page.evaluate(() => window.scrollY);
   const entry = name => page.locator(".need-entry").filter({ hasText: name });
-  for (const [name, value] of [["Copper", "50%"], ["Silver", "5%"]]) {
+  for (const [name, value] of [["Copper", "10%"], ["Silver", "5%"]]) {
     await entry(name).click();
     await expect(entry(name)).toBeFocused();
     expect(await page.evaluate(() => window.scrollY)).toBe(scroll);

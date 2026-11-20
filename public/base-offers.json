@@ -1,0 +1,20 @@
+{
+  "terms": {
+    "sourceChain": 5042002,
+    "destinationChain": 84532,
+    "escrow": "0xbfaee4fa7a52cd404b9a1d5dab08da09baa0ab60",
+    "recipient": "0x4cFd3446d4C5e63A3023B7FBE2c87DBe8b3008eC",
+    "expires": 1797769354,
+    "leadHours": 24,
+    "stock": 500,
+    "unitCents": {
+      "BRENT": 7344,
+      "COPPER": 464,
+      "NGAS": 306,
+      "WTI": 6773,
+      "XAG": 3672,
+      "XAU": 303960
+    }
+  },
+  "signature": "0x20c1c0b0f56c609d0057e87e6dd3c06ff0e4da3fea6eecace32fe67cb189d34177e272d73b88d7fbe672c23c383a57005dd9733608363f3cef345d56fb45d05a1b"
+}

@@ -94,7 +94,7 @@ test("historical expiry fits only if the buyer has enough time left before cutof
   assert.equal(evaluate(state, recorded, today, observed).kind, "Buy");
 });
 
-test("orders use 50% by default and qualify at their own exact threshold", () => {
+test("older orders without saved terms use 50% and qualify at their own exact threshold", () => {
   const even = { ...m, contracts: [{ strike: 5.7, bid: .49, ask: .51 }] };
   assert.equal(evaluate(s, even, t).kind, "Buy");
   const stricter = { ...s, order: { ...s.order, threshold: 51 } };

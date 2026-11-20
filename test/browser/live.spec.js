@@ -5,8 +5,10 @@ import {
   parseEther,
   toHex,
 } from "viem";
-import { liveAbi as abi } from "../../lib/live-abi.js";
+import { routeAbi } from "../../lib/routed-abi.js";
+import { liveAbi } from "../../lib/live-abi.js";
 import fs from "node:fs";
+const abi = [...liveAbi,...routeAbi];
 const network = JSON.parse(fs.readFileSync("public/arc-network.json"));
 async function enterSavedOrders(page) {
   await page.goto("/arc.html");
@@ -108,6 +110,8 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   await expect(page.locator("#termsSummary")).toContainText("Dated forecast allowed");
   await page.locator("#orderTerms summary").click();
   await recording.uncheck();
+  await page.getByLabel("Order within two minutes").check();
+  await expect(page.locator("#lines")).toContainText("within 2 min");
   await page.locator("#approve [name=deposit]").fill("0");
   await expect(page.locator("#fundingReason")).toContainText("network fee");
   await expect(authorize).toBeDisabled();
@@ -136,6 +140,10 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   const order = decodeFunctionData({ abi, data: calls[1].data });
   expect(order.functionName).toBe("plan");
   expect(order.args.at(-1)).toBe(false);
+  expect(order.args[5]).toBe(10);
+  const seconds = Number(order.args[4]) - Date.now()/1000;
+  expect(seconds).toBeGreaterThan(105);
+  expect(seconds).toBeLessThanOrEqual(120);
 });
 
 test("the sparrow flies from passkey planning into live order review", async ({page}) => {
@@ -276,4 +284,37 @@ test("order filters keep markets visible, purchases get icons, and sliders previ
   await page.getByRole("button",{name:"Orders",exact:true}).click();
   await expect(page.locator("#orderList article:visible")).toHaveCount(1);
   await expect(board).toContainText("Oil (Brent) price");
+});
+
+test("cross-chain review signs the cheaper delivered offer and the fee cap in one batch", async ({page}) => {
+  const buyer = "0x"+"12".repeat(20);
+  await page.addInitScript(buyer => {
+    localStorage.setItem("forestock.arcWallet",buyer);
+    localStorage.setItem("forestock.arcDraft."+buyer,JSON.stringify({allowance:1,lines:[
+      {series:"COPPER",name:"Copper",unit:"lb",quantity:.1,price:580,cap:600,
+       salt:"0x"+"23".repeat(32),orderBy:Math.floor(Date.now()/1000)+86400}]}));
+  },buyer);
+  await page.route("**/generated/wallet-config.json",r=>r.fulfill({json:{clientKey:"test-client"}}));
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[]}}));
+  await page.route("**/burn/USDC/fees/26/6?*",r=>r.fulfill({json:[{finalityThreshold:2000,minimumFee:0,forwardFee:{high:53000}}]}));
+  await page.route("**/generated/circle.js",r=>r.fulfill({contentType:"application/javascript",body:
+    'export function hasWalletCredential(){return true} export function connectWallet(){} export function waitEscrowOperation(){} export async function sendEscrowCalls(k,b,c){window.sent=c;return {success:true,receipt:{status:"success",transactionHash:"0x"+"ab".repeat(32)}}}'}));
+  // Re-sign the test quote with a generated fixture so this test remains valid after production quotes expire.
+  const {privateKeyToAccount,generatePrivateKey} = await import("viem/accounts");
+  const supplier=privateKeyToAccount(generatePrivateKey());
+  const terms={sourceChain:5042002,destinationChain:84532,escrow:network.routed.escrow,recipient:supplier.address,
+    expires:Math.floor(Date.now()/1000)+172800,leadHours:24,stock:500,unitCents:{COPPER:464}};
+  const signature=await supplier.signMessage({message:JSON.stringify(terms)});
+  await page.route("**/base-offers.json",r=>r.fulfill({json:{terms,signature}}));
+  await mockArc(page,()=>"2",{baseSupplier:supplier.address});
+  await enterSavedOrders(page);
+  await page.getByRole("link",{name:"Compare Arc and Base suppliers"}).click();
+  await expect(page.locator("#lines")).toContainText("Base Sepolia");
+  await expect(page.locator("#depositSummary")).toHaveText("0.52 test USDC");
+  await page.getByRole("button",{name:"Authorize with passkey"}).click();
+  await expect.poll(()=>page.evaluate(()=>Boolean(window.sent))).toBe(true);
+  const calls=await page.evaluate(()=>window.sent.map(c=>({to:c.to,data:c.data})));
+  expect(calls.every(c=>c.to===network.routed.escrow)).toBeTruthy();
+  expect(calls.map(c=>decodeFunctionData({abi,data:c.data}).functionName)).toEqual(["configure","plan","selectBase"]);
+  expect(decodeFunctionData({abi,data:calls[2].data}).args.slice(1)).toEqual([520,60000n]);
 });
