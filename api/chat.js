@@ -118,6 +118,12 @@ export default async function chat(req, res) {
       clarifications.push("I’ve noted " + amount.requested + " of " + amount.name +
         (amount.dateNote ? " for the " + amount.dateNote : "") + ". The smallest order for " + amount.name + " is " + amount.minimum + ".");
     }
+    for (const line of [proposed, ...(proposed.additional || [])]) {
+      if (!line.dueDate && line.dateNote && validDate(line.dateNote)) {
+        line.dueDate = line.dateNote;
+        delete line.dateNote;
+      }
+    }
     if (!validDraft(proposed, catalog)) throw Error();
     if (clarifications.length) {
       const others = (proposed.additional || []).filter(line => !smallAmounts.some(amount => amount.series === line.series)).map(line => line.label);

@@ -64,10 +64,11 @@ test("the chat keeps incomplete material lines and buyer wording until clarified
   assert.equal(guarded.data.draft.amountNote, "100 mg");
   assert.equal(guarded.data.draft.dateNote, "end of this week");
   assert.match(guarded.data.reply, /1 lb/);
-  proposal.additional.unshift({ label: "Copper", series: "COPPER", quantity: null });
+  proposal.additional.unshift({ label: "Copper", series: "COPPER", quantity: null, dateNote: "2026-11-27" });
   proposal.series = proposal.quantity = null;
   const promoted = await request({ ...body, catalog });
   assert.equal(promoted.data.draft.series, "COPPER");
+  assert.equal(promoted.data.draft.dueDate, "2026-11-27");
   assert.equal(promoted.data.draft.additional.length, 2);
   proposal.additional[1].dueDate = "2026-02-31";
   assert.equal((await request({ ...body, catalog })).code, 503);
