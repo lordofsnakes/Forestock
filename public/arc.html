@@ -8,10 +8,11 @@
     />
     <meta name="theme-color" content="#faf4e9" />
     <link rel="stylesheet" href="/style.css" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon.png" />
     <title>Forestock · Arc orders</title>
   </head>
-  <body>
+  <body hidden>
     <header>
       <div class="brand">
         <button type="button" class="bird mark" aria-label="Animate the Forestock sparrow"><span></span></button>Forestock
@@ -91,7 +92,7 @@
       <section id="orders" class="card">
         <div class="needs-heading">
           <h2>Your orders</h2>
-          <a href="/?plan=arc">Add need</a>
+          <a data-step href="/?plan=arc">Add need</a>
         </div>
         <div id="orderList"></div>
       </section>
@@ -154,6 +155,6 @@
         <button class="primary">Save with passkey</button>
       </form>
     </dialog>
-    <script type="module" src="/generated/live.js"></script>
+    <script type="module" src="/entry.js"></script>
   </body>
 </html>

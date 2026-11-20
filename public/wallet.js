@@ -1,3 +1,4 @@
+import { openStep, restartOnReopen } from "./navigation.js";
 import { flyToScreen } from "./onboarding-motion.js";
 const intro = document.querySelector("#walletIntro");
 const controls = document.querySelector("#walletControls");
@@ -18,7 +19,7 @@ let sdk, clientKey, busy = false, loadId = 0;
 
 function showAddress() {
   const saved = localStorage.getItem(key);
-  document.querySelector("#liveOrders").hidden = !saved;
+  document.querySelector("#liveOrders").hidden = !saved || !intro.hidden;
   address.hidden = !saved || !panel.open;
   address.textContent = saved || "";
   register.hidden = Boolean(saved);
@@ -32,13 +33,14 @@ function showAddress() {
 function startPlanning() {
   if (busy) return;
   if (localStorage.getItem(key) && new URLSearchParams(location.search).get("plan") !== "arc") {
-    location.assign("/?plan=arc");
+    openStep("/?plan=arc");
     return;
   }
   loadId++;
   const welcome = document.querySelector("#welcome");
   flyToScreen(intro, welcome, ".portrait", () => {
     intro.hidden = true;
+    document.querySelector("#liveOrders").hidden = !localStorage.getItem(key);
     open.hidden = false;
     welcome.hidden = false;
     const title = document.querySelector("#welcomeTitle");
@@ -119,8 +121,10 @@ controls.addEventListener("click", async event => {
     buttons.forEach(b => b.disabled = false);
   }
   if (connected && !intro.hidden) startPlanning();
-  else if (connected && !document.querySelector("#app").hidden) location.assign("/arc.html");
+  else if (connected && !document.querySelector("#app").hidden) openStep("/arc.html");
 });
 loadWallet();
 
 if (localStorage.getItem(key) && new URLSearchParams(location.search).get("plan") === "arc") startPlanning();
+
+restartOnReopen(() => intro.hidden && !busy && !panel.open);

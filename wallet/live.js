@@ -1,3 +1,4 @@
+import { openStep, restartOnReopen } from "../public/navigation.js";
 import {
   createPublicClient,
   http,
@@ -479,7 +480,7 @@ async function submit(type, calls) {
     await confirmed(receipt, type);
   } catch (e) {
     const feeError = /prefund|insufficient funds|AA21/i.test((e.shortMessage || "") + " " + (e.message || ""));
-    if (localStorage.getItem(opKey())) notice("Submitted. Refresh this page to check the pending operation.");
+    if (localStorage.getItem(opKey())) notice("Submitted. Reopen Arc orders to check the pending operation.");
     else if (feeError) {
       if (type === "plan" && funds) gasShortfall = { balance: funds.wallet, deposit: calls[0].value };
       notice(type === "plan" ? "Arc needs more test USDC for this authorization." : "Your wallet needs test USDC for the network fee. Open Budget for the funding address.");
@@ -585,7 +586,7 @@ $("orderList").onclick = (e) => {
         },
       }),
     );
-    location.assign("/?plan=arc&talk=1");
+    openStep("/?plan=arc&talk=1");
   }
   if (b?.dataset.cancel && confirm("Cancel this authorized need on Arc?"))
     transact("cancel", [call("cancel", [b.dataset.cancel])]);
@@ -658,3 +659,5 @@ async function start() {
   setInterval(refreshWhenVisible, 12000);
 }
 start().catch((e) => notice(e.shortMessage || e.message));
+
+restartOnReopen(() => !working);

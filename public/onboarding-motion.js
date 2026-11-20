@@ -1,3 +1,4 @@
+import { openStep } from "./navigation.js";
 // Keep the sparrow in viewport space while the two screens exchange places.
 let travelling = false;
 const ease = "cubic-bezier(.35,0,.18,1)";
@@ -88,7 +89,7 @@ function makeFlyer() {
 export async function flyToArcReview(scene) {
   if (travelling) return;
   if (matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) {
-    location.assign("/arc.html");
+    openStep("/arc.html");
     return;
   }
   travelling = true;
@@ -106,7 +107,7 @@ export async function flyToArcReview(scene) {
     ], {duration: 1350, easing: "ease-in", fill: "forwards"}).finished;
     sessionStorage.setItem("forestock.reviewFlight", String(Date.now()));
   } finally {
-    location.assign("/arc.html");
+    openStep("/arc.html");
     // Restore the conversation if the browser caches it for Back.
     window.addEventListener("pageshow", () => {
       flyer.remove();

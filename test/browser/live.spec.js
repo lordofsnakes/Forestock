@@ -8,6 +8,15 @@ import {
 import { liveAbi as abi } from "../../lib/live-abi.js";
 import fs from "node:fs";
 const network = JSON.parse(fs.readFileSync("public/arc-network.json"));
+async function enterSavedOrders(page) {
+  await page.goto("/arc.html");
+  await expect(page.getByRole("heading", {name: "Let’s plan a purchase"})).toBeVisible();
+  await expect(page.getByRole("link", {name: "Arc orders"})).toBeHidden();
+  await page.getByRole("button", {name: "Continue to order planning"}).click();
+  await page.getByRole("link", {name: "Arc orders"}).click();
+  await expect(page).toHaveURL(/arc\.html$/);
+}
+
 async function mockArc(page, getBalance, reads = {}) {
   await page.route("https://rpc.testnet.arc.network/**", async (r) => {
     const req = r.request().postDataJSON();
@@ -79,7 +88,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   );
   let balance = "0";
   await mockArc(page, () => balance);
-  await page.goto("/arc.html");
+  await enterSavedOrders(page);
   const authorize = page.getByRole("button", {name:"Authorize with passkey"});
   await expect(page.locator("#fundingAddress")).toHaveText(buyer);
   await expect(authorize).toBeDisabled();
@@ -116,7 +125,7 @@ test("the sparrow flies from passkey planning into live order review", async ({p
   await page.addInitScript(() => localStorage.setItem("forestock.arcWallet", "0x" + "12".repeat(20)));
   await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
   await page.goto("/?plan=arc");
-  for (const name of ["Copper","0.01 lb","1 USDC","Review order"]) {
+  for (const name of ["Continue to order planning","Copper","0.01 lb","1 USDC","Review order"]) {
     await page.getByRole("button",{name,exact:true}).click();
   }
   await expect(page.locator(".courier-wing")).toBeVisible();
@@ -148,7 +157,7 @@ test("live copper chat explains a waiting order and offers a different next ques
     turn = route.request().postDataJSON();
     return route.fulfill({json: {reply: "Your copper order stays open while the agent watches for a stronger signal."}});
   });
-  await page.goto("/arc.html");
+  await enterSavedOrders(page);
   await page.getByRole("button", {name: "Ask about this order"}).click();
   await expect(page.getByRole("log")).toContainText("25.5%");
   const ask = page.getByRole("button", {name: "How does this affect my order?"});
@@ -159,4 +168,41 @@ test("live copper chat explains a waiting order and offers a different next ques
   expect(turn.marketContext).toContain("below your 50%");
   await expect(ask).toHaveCount(0);
   await expect(page.getByRole("button", {name: "What happens at the deadline?"})).toBeVisible();
+});
+
+test("fresh launches and reloads start at the sparrow, including saved chat links", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  const buyer = "0x" + "12".repeat(20);
+  await page.addInitScript(buyer => localStorage.setItem("forestock.arcWallet", buyer), buyer);
+  await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
+  const welcome = page.getByRole("heading", {name: "Let’s plan a purchase"});
+  await page.goto("/?plan=arc&talk=1");
+  await expect(welcome).toBeVisible();
+  await page.getByRole("button", {name:"Continue to order planning"}).click();
+  await expect(page.getByRole("heading", {name:"Plan an order"})).toBeVisible();
+  await page.reload();
+  await expect(welcome).toBeVisible();
+  await enterSavedOrders(page);
+  await page.reload();
+  await expect(welcome).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("forestock.arcWallet"))).toBe(buyer);
+});
+
+test("reopening a standalone app returns to onboarding", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "standalone", {value: true});
+    localStorage.setItem("forestock.arcWallet", "0x" + "12".repeat(20));
+  });
+  await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
+  await page.goto("/");
+  await page.getByRole("button", {name:"Continue to order planning"}).click();
+  await expect(page.getByRole("heading", {name:"Plan an order"})).toBeVisible();
+  await page.evaluate(() => {
+    for (const hidden of [true, false]) {
+      Object.defineProperty(document, "hidden", {value: hidden, configurable: true});
+      document.dispatchEvent(new Event("visibilitychange"));
+    }
+  });
+  await expect(page.getByRole("heading", {name: "Let’s plan a purchase"})).toBeVisible();
 });

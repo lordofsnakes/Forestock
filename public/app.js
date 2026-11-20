@@ -1,3 +1,4 @@
+import { openStep } from "./navigation.js";
 import { flyToScreen, flyToArcReview, hop } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
 import { day, week, refresh, evaluate, currentQuote, defaultThreshold, thresholdFor, midpointPercent, totalCents, defaultQuantity } from "./decision.js";
@@ -279,7 +280,7 @@ if (liveBuyer && new URLSearchParams(location.search).get("talk") === "1") {
   if (talk) chat.marketConversation(talk.id, talk.facts, talk.context, talk.draft);
 }
 document.querySelector("#backToOrders").onclick = () => {
-  if (liveBuyer) { location.assign("/arc.html"); return; }
+  if (liveBuyer) { openStep("/arc.html"); return; }
   chat.leaveMarket();
   welcome.hidden = true;
   document.querySelector("nav").hidden = false;
