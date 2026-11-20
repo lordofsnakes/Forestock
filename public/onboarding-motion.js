@@ -13,11 +13,7 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
   }
   const bird = from.querySelector(".perch-bird, .portrait");
   const origin = bird.querySelector("span").getBoundingClientRect();
-  const flyer = document.createElement("div");
-  flyer.className = "bird courier";
-  flyer.setAttribute("aria-hidden", "true");
-  flyer.append(document.querySelector("#flight-art").content.cloneNode(true));
-  document.body.append(flyer);
+  const flyer = makeFlyer();
   const x = origin.left, y = origin.top;
   let arrived = false, landing, entrance;
   const chrome = document.querySelectorAll("body > header, body > nav");
@@ -62,4 +58,83 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
     for (const element of chrome) element.inert = false;
     to.querySelector("h1")?.focus({preventScroll:true});
   }
+}
+
+function makeFlyer() {
+  const flyer = document.createElement("div");
+  flyer.className = "bird courier";
+  flyer.setAttribute("aria-hidden", "true");
+  flyer.innerHTML = `<svg viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+        <defs>
+          <path id="flight-feathers" d="M92 251 C97 208 138 159 190 149 C227 141 256 153 259 184 C263 225 225 268 162 287 C123 300 84 297 92 251Z"/>
+          <clipPath id="wing-shape"><use href="#flight-feathers"/></clipPath>
+          <mask id="flying-body">
+            <rect width="400" height="400" fill="white"/>
+            <use href="#flight-feathers" fill="black" stroke="black" stroke-width="4"/>
+          </mask>
+          <clipPath id="underwing-shape"><path d="M132 135 Q219 106 274 157 L277 248 Q228 314 120 302 Q97 277 103 249 Q110 195 132 165Z"/></clipPath>
+        </defs>
+        <g clip-path="url(#underwing-shape)">
+          <rect x="98" y="125" width="185" height="184" fill="#eed1a7"/>
+          <image href="/sparrow.png" width="400" height="400" transform="translate(-970 44) scale(3.8 1)"/>
+        </g>
+        <image href="/sparrow.png" width="400" height="400" mask="url(#flying-body)"/>
+        <g class="courier-wing"><image href="/sparrow.png" width="400" height="400" clip-path="url(#wing-shape)"/></g>
+      </svg>`;
+  document.body.append(flyer);
+  return flyer;
+}
+
+export async function flyToArcReview(scene) {
+  if (travelling) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) {
+    location.assign("/arc.html");
+    return;
+  }
+  travelling = true;
+  const bird = scene.querySelector(".portrait");
+  const origin = bird.getBoundingClientRect();
+  const flyer = makeFlyer();
+  scene.inert = true;
+  bird.style.visibility = "hidden";
+  const scale = origin.width / flyer.offsetWidth;
+  try {
+    await flyer.animate([
+      at(origin.left, origin.top, scale),
+      {...at(origin.left + 32, Math.max(8, origin.top - 34), scale * .94, -6), offset: .5},
+      at(innerWidth + 72, Math.max(8, origin.top - 110), 1, 8)
+    ], {duration: 1350, easing: "ease-in", fill: "forwards"}).finished;
+    sessionStorage.setItem("forestock.reviewFlight", String(Date.now()));
+  } finally {
+    location.assign("/arc.html");
+    // Restore the conversation if the browser caches it for Back.
+    window.addEventListener("pageshow", () => {
+      flyer.remove();
+      bird.style.visibility = "";
+      scene.inert = travelling = false;
+    }, {once:true});
+  }
+}
+
+export async function landOnArcReview(bird) {
+  const time = Number(sessionStorage.getItem("forestock.reviewFlight"));
+  sessionStorage.removeItem("forestock.reviewFlight");
+  if (!time || Date.now() - time > 30000 || matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) return;
+  const target = bird.getBoundingClientRect();
+  if (!target.width) return;
+  const flyer = makeFlyer();
+  bird.style.visibility = "hidden";
+  try {
+    await flyer.animate([at(-78, Math.max(8, target.top-55), 1, -4),
+      at(target.left, target.top, target.width/flyer.offsetWidth)], {duration: 850, easing:"ease-out"}).finished;
+  } finally {
+    flyer.remove();
+    bird.style.visibility = "";
+  }
+}
+
+export function hop(bird) {
+  bird.classList.remove("flying");
+  void bird.offsetWidth;
+  bird.classList.add("flying");
 }

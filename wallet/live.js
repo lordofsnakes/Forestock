@@ -9,6 +9,8 @@ import {
   formatEther,
   isAddress,
 } from "viem";
+import { hop, landOnArcReview } from "../public/onboarding-motion.js";
+import { sparrowSpeech } from "../public/sparrow-speech.js";
 import { arcTestnet } from "viem/chains";
 import { liveAbi as abi } from "../lib/live-abi.js";
 import { liveDecision } from "../lib/live-decision.js";
@@ -79,7 +81,7 @@ function showView(next) {
     $(name).hidden = name !== next;
   $("review").hidden = next !== "orders" || !draft?.lines?.length;
   $("arc").querySelector("h1").textContent = {
-    orders: "Purchase orders",
+    orders: draft?.lines?.length ? "Review your order" : "Purchase orders",
     budget: "Budget",
     activity: "Activity",
   }[next];
@@ -138,9 +140,81 @@ async function blockReceipt(id, block, eventName) {
   }
   return receipts.get(k) || "";
 }
+const guide = sparrowSpeech($("review"), $("guideMessage"));
+let spoken, gasShortfall;
+function say(message) {
+  if (message === spoken) return;
+  spoken = message;
+  const line = document.createElement("div");
+  guide.speak(line, message);
+  for (const old of [...$("guideMessage").children]) if (old !== line) old.remove();
+}
+document.addEventListener("pointerover", e => {
+  const bird = e.target.closest(".bird");
+  if (e.pointerType === "mouse" && bird && !bird.contains(e.relatedTarget)) hop(bird);
+});
+document.addEventListener("click", e => {
+  const bird = e.target.closest(".bird");
+  if (bird) hop(bird);
+});
+function updateApproval() {
+  if (!funds || !draft) return;
+  const f = $("approve");
+  const input = f.elements.deposit;
+  const valid = input.validity.valid;
+  const deposit = valid ? parseEther(input.value) : 0n;
+  const feeShort = gasShortfall?.balance === funds.wallet && gasShortfall?.deposit === deposit;
+  const needsFunds = valid && (funds.wallet <= deposit || feeShort);
+  $("authorize").disabled = !valid || needsFunds || working;
+  $("fundingHelp").hidden = !needsFunds;
+  $("depositSummary").textContent = valid ? amount(deposit) + " test USDC" : "Choose a deposit";
+  $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%";
+  if (needsFunds) {
+    $("fundingReason").textContent = "Your wallet has " + amount(funds.wallet) + " test USDC. " +
+      (funds.wallet < deposit ? "The deposit needs " + amount(deposit) + ", plus the network fee." :
+        feeShort ? "Arc reported insufficient funds for the network fee. Add funds or lower the deposit." :
+        "Leave some test USDC in your wallet for the network fee.");
+    say("Your draft is saved. Add test USDC to your wallet, then I can help you authorize this order.");
+  } else if (valid) {
+    say("Review your limits, then use your passkey to let me watch for the right time to buy.");
+  }
+}
+$("approve").addEventListener("input", updateApproval);
+$("approve").addEventListener("invalid", e => {
+  if ($("orderTerms").contains(e.target)) $("orderTerms").open = true;
+}, true);
+$("copyAddress").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(buyer);
+    $("balanceResult").textContent = "Address copied.";
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents($("fundingAddress"));
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    $("balanceResult").textContent = "Wallet address selected. Copy it to use at the faucet.";
+  }
+};
+$("checkBalance").onclick = async () => {
+  const button = $("checkBalance");
+  button.disabled = true;
+  $("balanceResult").textContent = "Checking Arc…";
+  try {
+    funds.wallet = await client.getBalance({address: buyer, blockTag:"latest"});
+    gasShortfall = undefined;
+    showDraft();
+    if ($("fundingHelp").hidden) {
+      notice("Balance updated. Your deposit is available.");
+      $("authorize").focus({preventScroll:true});
+    } else $("balanceResult").textContent = "Checked. Available " + amount(funds.wallet) + " test USDC.";
+  } catch { $("balanceResult").textContent = "Couldn’t read Arc. Try checking again."; }
+  finally { button.disabled = false; }
+};
 function showDraft() {
   if (!draft?.lines?.length) return;
   $("review").hidden = view !== "orders";
+  $("approve").hidden = false;
   $("reviewBalance").textContent =
     "Wallet balance " +
     amount(funds.wallet) +
@@ -174,6 +248,7 @@ function showDraft() {
     );
     previewInitialized = true;
   }
+  updateApproval();
 }
 async function orderCard(id, o) {
   const series = hexToString(o.series, { size: 32 });
@@ -262,6 +337,7 @@ async function refresh() {
       read("committed", [buyer, (head.timestamp + 259200n) / 604800n]),
     ]);
     funds = { wallet, free, limit, spent };
+    if ($("notice").textContent === "Reading your escrow on Arc…") notice("");
     $("balances").textContent =
       "Wallet " +
       amount(wallet) +
@@ -315,7 +391,6 @@ async function refresh() {
         )
         .join("") ||
       "<p>Receipts appear here when the agent places an order on Arc.</p>";
-    if ($("notice").textContent === "Reading your escrow on Arc…") notice("");
   } finally {
     loading = false;
   }
@@ -343,7 +418,7 @@ async function confirmed(receipt, type) {
     }
     localStorage.removeItem(draftKey);
     draft = null;
-    $("review").hidden = true;
+    showView(view);
   }
   localStorage.removeItem(opKey());
   if (!receipt.success || receipt.receipt.status !== "success")
@@ -370,6 +445,7 @@ async function transact(type, calls) {
 async function submit(type, calls) {
   if (working) return;
   working = true;
+  updateApproval();
   try {
     const pending = JSON.parse(localStorage.getItem(opKey()));
     if (pending) {
@@ -386,12 +462,15 @@ async function submit(type, calls) {
         "This draft was already cleared. Refresh to see your orders.",
       );
     const value = calls.reduce((sum, c) => sum + c.value, 0n);
+    funds.wallet = await client.getBalance({address: buyer, blockTag:"latest"});
+    showDraft();
     if (value > funds.wallet)
       throw Error(
         "Your wallet has " +
           amount(funds.wallet) +
           " test USDC. Reduce the deposit or fund your wallet.",
       );
+    if (value === funds.wallet) throw Error("Leave test USDC in your wallet for the Arc network fee.");
     notice("Confirm this Arc Testnet transaction with your passkey.");
     const receipt = await sendEscrowCalls(key, buyer, calls, (hash) => {
       localStorage.setItem(opKey(), JSON.stringify({ type, hash }));
@@ -399,21 +478,15 @@ async function submit(type, calls) {
     });
     await confirmed(receipt, type);
   } catch (e) {
-    notice(
-      localStorage.getItem(opKey())
-        ? "Submitted. Refresh this page to check the pending operation."
-        : /prefund|insufficient funds|AA21/i.test(
-              (e.shortMessage || "") + " " + (e.message || ""),
-            )
-          ? "Your passkey wallet needs Arc test USDC for the deposit and network fee. Open Budget for the wallet address."
-          : (
-              e.shortMessage ||
-              e.message ||
-              "The transaction was not completed."
-            ).slice(0, 360),
-    );
+    const feeError = /prefund|insufficient funds|AA21/i.test((e.shortMessage || "") + " " + (e.message || ""));
+    if (localStorage.getItem(opKey())) notice("Submitted. Refresh this page to check the pending operation.");
+    else if (feeError) {
+      if (type === "plan" && funds) gasShortfall = { balance: funds.wallet, deposit: calls[0].value };
+      notice(type === "plan" ? "Arc needs more test USDC for this authorization." : "Your wallet needs test USDC for the network fee. Open Budget for the funding address.");
+    } else notice((e.shortMessage || e.message || "The transaction was not completed.").slice(0, 360));
   } finally {
     working = false;
+    updateApproval();
   }
 }
 function terms(form) {
@@ -451,7 +524,7 @@ $("discard").onclick = () => {
   if (working || localStorage.getItem(opKey())) return;
   localStorage.removeItem(draftKey);
   draft = null;
-  $("review").hidden = true;
+  showView(view);
 };
 $("fund").onsubmit = (e) => {
   e.preventDefault();
@@ -547,7 +620,14 @@ async function start() {
     location.replace("/");
     return;
   }
-  $("walletAddress").textContent = buyer;
+  $("walletAddress").textContent = $("fundingAddress").textContent = buyer;
+  draft = JSON.parse(localStorage.getItem(draftKey));
+  if (draft?.lines?.length) {
+    showView("orders");
+    $("approve").hidden = true;
+    say("Let me check your wallet and order.");
+    landOnArcReview($("guide").querySelector(".portrait"));
+  }
   const [network, walletConfig, materials] = await Promise.all(
     [
       "/arc-network.json",
@@ -564,14 +644,15 @@ async function start() {
   address = network.escrow;
   key = walletConfig.clientKey;
   catalog = materials.assets;
-  draft = JSON.parse(localStorage.getItem(draftKey));
   if (localStorage.getItem(opKey())) await transact("resume", []);
   await refresh();
-  setInterval(() => {
+  const refreshWhenVisible = () => {
     if (!document.hidden && !working)
       refresh().catch(() =>
         notice("Arc is temporarily unavailable. Rechecking…"),
       );
-  }, 12000);
+  };
+  document.addEventListener("visibilitychange", refreshWhenVisible);
+  setInterval(refreshWhenVisible, 12000);
 }
 start().catch((e) => notice(e.shortMessage || e.message));

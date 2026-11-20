@@ -50,6 +50,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
      export function waitEscrowOperation() {}`,
     }),
   );
+  let balance = "0";
   await page.route("https://rpc.testnet.arc.network/**", async (r) => {
     const req = r.request().postDataJSON();
     let result;
@@ -60,7 +61,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
         timestamp: toHex(Math.floor(Date.now() / 1000)),
         transactions: [],
       };
-    if (req.method === "eth_getBalance") result = toHex(parseEther("2"));
+    if (req.method === "eth_getBalance") result = toHex(parseEther(balance));
     if (req.method === "eth_call") {
       const { functionName } = decodeFunctionData({
         abi,
@@ -75,7 +76,19 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
     return r.fulfill({ json: { jsonrpc: "2.0", id: req.id, result } });
   });
   await page.goto("/arc.html");
-  await expect(page.locator("#balances")).toContainText("Wallet 2");
+  const authorize = page.getByRole("button", {name:"Authorize with passkey"});
+  await expect(page.locator("#fundingAddress")).toHaveText(buyer);
+  await expect(authorize).toBeDisabled();
+  await expect(page.getByRole("link", {name:"Open Circle faucet"})).toHaveAttribute("href","https://faucet.circle.com/");
+  await page.locator("#orderTerms summary").click();
+  await page.locator("#approve [name=deposit]").fill("0");
+  await expect(page.locator("#fundingReason")).toContainText("network fee");
+  await expect(authorize).toBeDisabled();
+  await page.locator("#approve [name=deposit]").fill("0.06");
+  balance = "1";
+  await page.getByRole("button", {name:"Check balance"}).click();
+  await expect(authorize).toBeEnabled();
+  await expect(page.locator("#fundingHelp")).toBeHidden();
   await expect(page.locator("#approve [name=deposit]")).toHaveValue("0.06");
   await page.getByRole("button", { name: "Authorize with passkey" }).click();
   await expect(
@@ -92,4 +105,21 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   const order = decodeFunctionData({ abi, data: calls[1].data });
   expect(order.functionName).toBe("plan");
   expect(order.args.at(-1)).toBe(false);
+});
+
+test("the sparrow flies from passkey planning into live order review", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"no-preference"});
+  await page.addInitScript(() => localStorage.setItem("forestock.arcWallet", "0x" + "12".repeat(20)));
+  await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
+  await page.goto("/?plan=arc");
+  for (const name of ["Copper","0.01 lb","1 USDC","Review order"]) {
+    await page.getByRole("button",{name,exact:true}).click();
+  }
+  await expect(page.locator(".courier-wing")).toBeVisible();
+  await expect(page).toHaveURL(/arc\.html$/);
+  await expect(page.locator(".courier-wing")).toBeVisible();
+  await expect(page.locator("#guide .portrait")).toBeVisible();
+  await expect(page.locator(".courier")).toHaveCount(0);
+  await page.locator("#guide .portrait").click();
+  await expect(page.locator("#guide .portrait")).toHaveClass(/flying/);
 });

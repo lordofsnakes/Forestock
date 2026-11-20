@@ -14,7 +14,7 @@
   <body>
     <header>
       <div class="brand">
-        <img src="/sparrow.png" width="48" height="48" alt="" />Forestock
+        <button type="button" class="bird mark" aria-label="Animate the Forestock sparrow"><span></span></button>Forestock
       </div>
       <small>Arc Testnet</small>
     </header>
@@ -23,10 +23,25 @@
       <p id="notice" role="status" aria-live="polite">
         Reading your escrow on Arc…
       </p>
-      <section id="review" class="card" hidden>
-        <h2>Review your order</h2>
+      <section id="review" class="card" aria-label="Draft order" hidden>
+        <div id="guide"><button class="bird portrait" aria-label="Animate the copper-winged sparrow">
+        <span>
+          <svg viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+            <defs>
+              <clipPath id="lower-bill-clip">
+                <path d="M309 99 Q329 92 347 75 Q337 96 327 105 Q316 110 309 99Z"/>
+              </clipPath>
+            </defs>
+            <image href="/sparrow.png" width="400" height="400"/>
+            <path class="mouth-opening" fill="#4b291b" d="M309 99 Q329 91 347 75 L346 84 Q333 101 321 107Z"/>
+            <g class="lower-bill"><image href="/sparrow.png" width="400" height="400" clip-path="url(#lower-bill-clip)"/></g>
+          </svg>
+        </span>
+      </button><div id="guideMessage" aria-live="polite"></div></div>
         <div id="lines"></div>
         <form id="approve">
+          <div class="row"><span>Into escrow</span><strong id="depositSummary"></strong></div>
+          <details id="orderTerms"><summary>Edit buying rules <span id="termsSummary"></span></summary>
           <label
             >Weekly spending limit (test USDC)<input
               name="limit"
@@ -52,17 +67,24 @@
               max="100"
               required
           /></label>
+          </details>
           <label class="arc-checkbox"
             ><input type="checkbox" name="recording" />Allow a dated forecast
             when a live quote is unavailable</label
           >
           <p id="reviewBalance"></p>
-          <p>
-            Your passkey approves these needs. The agent can reserve funds up to
-            your cap. The test supplier automatically accepts eligible orders
-            and receives the held USDC.
-          </p>
-          <button class="primary">Authorize with passkey</button>
+          <section id="fundingHelp" hidden aria-labelledby="fundingTitle">
+            <h3 id="fundingTitle">Fund your passkey wallet</h3>
+            <p id="fundingReason"></p>
+            <p>Choose USDC and Arc Testnet at the faucet. Use this wallet address.</p>
+            <code id="fundingAddress"></code>
+            <div class="actions"><button id="copyAddress" type="button">Copy address</button>
+            <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">Open Circle faucet ↗</a></div>
+            <button type="button" id="checkBalance">Check balance</button>
+            <span id="balanceResult" role="status"></span>
+          </section>
+          <p>Your agent can reserve funds within these limits. The test supplier receives payment when it accepts.</p>
+          <button id="authorize" class="primary" disabled>Authorize with passkey</button>
           <button type="button" id="discard">Discard draft</button>
         </form>
       </section>

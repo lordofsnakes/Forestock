@@ -522,3 +522,20 @@ select {
 #arc article { border-top: 1px solid #dfd0bb; padding: 12px 0; }
 #arc #notice:not(:empty) { border-left: 2px solid #b76532; padding-left: 10px; }
 #arc a { color: #733f22; }
+
+#guide .speaker-turn {
+  --speaker-size: clamp(100px, 28vw, 150px);
+  display: grid;
+  grid-template-columns: calc(var(--speaker-size) * .94) minmax(0, 1fr);
+  min-height: var(--speaker-size);
+  align-items: start;
+  margin: 0;
+}
+#guide .portrait { grid-area: 1 / 1; width: var(--speaker-size); }
+#guide .speech { max-width: 32ch; font-size: clamp(16px, 4vw, 19px); }
+#arc #orderTerms summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+#termsSummary, #reviewBalance { color: #69574a; font-size: .9rem; }
+#fundingHelp { border-left: 2px solid #b76532; padding: 4px 0 6px 14px; margin: 16px 0; }
+#fundingHelp .actions { align-items: center; gap: 12px; }
+#fundingAddress { display: block; overflow-wrap: anywhere; user-select: all; font-size: .9rem; }
+#balanceResult { font-size: .85rem; }

@@ -1,4 +1,4 @@
-import { flyToScreen } from "./onboarding-motion.js";
+import { flyToScreen, flyToArcReview, hop } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
 import { day, week, refresh, evaluate, currentQuote, defaultThreshold, thresholdFor, midpointPercent, totalCents, defaultQuantity } from "./decision.js";
 const el = document.querySelector("#app"),
@@ -71,7 +71,7 @@ function finishSetup(lines, allowance) {
         orderBy: Math.floor((due - day) / 1000), salt: "0x" + salt};
     });
     localStorage.setItem("forestock.arcDraft." + liveBuyer, JSON.stringify({lines:drafts,allowance}));
-    location.assign("/arc.html");
+    flyToArcReview(welcome);
     return;
   }
   flyToScreen(welcome, el, ".order-bird", () => openOrder(lines, allowance));
@@ -112,15 +112,10 @@ function openOrder(lines, allowance) {
   el.querySelector("h1").tabIndex = -1;
   el.querySelector("h1").focus();
 }
-function animateBird(button) {
-  button.classList.remove("flying");
-  void button.offsetWidth;
-  button.classList.add("flying");
-}
 document.addEventListener("pointerover", (e) => {
   const button = e.target.closest(".bird");
   if (button && e.pointerType === "mouse" && !button.contains(e.relatedTarget))
-    animateBird(button);
+    hop(button);
 });
 function compact(asset) {
   const { series, name, unit, price, premium } = asset;
@@ -485,7 +480,7 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (b.matches(".bird")) {
-    animateBird(b);
+    hop(b);
     return;
   }
   if (b.dataset.need) {
