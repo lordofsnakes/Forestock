@@ -4,9 +4,9 @@
 
 ## Try the demo
 
-Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time, then run the decision. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. For a repeatable forecast-driven purchase, choose **Copper**, **1 lb** and **600 USDC**. In Orders select **Use recorded forecast** if a live quote is showing. The November 19 recording gives a 70% probability, above the 65% threshold. Select **Run decision** and **Accept order** to see the supplier receipt and the $5.80 commitment in Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
+Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time. Orders shows whether the market and supplier terms qualify for a demo purchase. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. For a repeatable forecast-driven purchase, choose **Copper**, **1 lb** and **600 USDC**. In Orders select **Use recorded forecast** if a live quote is showing. The November 19 recording gives a 70% probability, above the 65% threshold. Select **Place demo order · $5.80** and **Accept order** to see the supplier receipt and the $5.80 commitment in Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
 
-The editable public workspace saves to this browser. Its controls simulate settlement. Activity also includes a separately executed Arc testnet purchase with independently verifiable receipts. Phone edits do not authorize the funded testnet signer.
+On Orders, tap a speech bubble beside the sparrow to discuss that timestamped market update and the selected order. **Back to Orders** returns to the same need. The editable public workspace saves to this browser. Its controls simulate settlement. Activity also includes a separately executed Arc testnet purchase with independently verifiable receipts. Phone edits do not authorize the funded testnet signer.
 
 ## Market data and rule
 

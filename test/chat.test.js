@@ -76,3 +76,19 @@ test("the chat keeps incomplete material lines and buyer wording until clarified
   proposal.additional[1].dueDate = "2026-02-31";
   assert.equal((await request({ ...body, catalog })).code, 503);
 });
+
+test("market questions use the displayed facts and retain the original order", async t => {
+  const marketContext = "Recorded quote: Silver at $47 or higher by Nov 19. Midpoint 42%.";
+  const previous = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const { messages } = JSON.parse(options.body);
+    assert.equal(messages[1].content, marketContext);
+    return Response.json({ choices: [{ message: { content: JSON.stringify({ reply: "That was a recorded quote.", draft: { ...draft, quantity: 800 } }) } }] });
+  });
+  const result = await request({ ...body, marketContext });
+  assert.equal(result.code, 200);
+  assert.deepEqual(result.data, { reply: "That was a recorded quote.", draft });
+  assert.equal((await request({ ...body, marketContext: {} })).code, 400);
+});

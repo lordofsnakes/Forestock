@@ -64,17 +64,16 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await button(page, "Budget").click();
   await button(page, "Pause").click();
   await button(page, "Orders").click();
-  await button(page, "Run decision").click();
   await expect(
     page.getByText("Your purchasing allowance is paused."),
   ).toBeVisible();
-  await button(page, "Budget").click();
+  await button(page, "Review budget").click();
   await button(page, "Resume").click();
   await page.locator("#limit").fill("590");
   await button(page, "Save allowance").click();
   await button(page, "Orders").click();
   await page.getByText("Try deadline scenario").click();
-  await button(page, "Run at cutoff").click();
+  await button(page, "Simulate cutoff order").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$584.20");
@@ -121,7 +120,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
   await expect(
     page.getByRole("heading", { name: "Ready to order" }),
   ).toBeVisible();
-  await button(page, "Run decision").click();
+  await button(page, "Place demo order · $5.80").click();
   await page.reload();
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
@@ -250,7 +249,7 @@ test("multiple needs survive a reload and settle against one shared balance", as
   await button(page, "Save need").click();
   await expect(page.locator(".need-entry")).toHaveCount(2);
   async function hold() {
-    const cutoff = button(page, "Run at cutoff");
+    const cutoff = button(page, "Simulate cutoff order");
     if (!await cutoff.isVisible()) await page.getByText("Try deadline scenario").click();
     await cutoff.click();
   }
@@ -384,7 +383,7 @@ test("a partial live response replays the matching copper quote through to a rec
   await start(page);
   await expect(page.locator(".order-status")).toContainText("70%");
   await expect(page.locator(".order-status")).toContainText("Recorded forecast from");
-  await button(page, "Run decision").click();
+  await button(page, "Place demo order · $5.80").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Accept order").click();
   await expect(page.getByRole("heading", { name: "Supplier receipt" })).toBeVisible();
@@ -427,4 +426,83 @@ test("bottom tabs slide in the selected direction and rapid switches leave one a
   await expect(page.locator(".departing-tab")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Active needs" })).toBeVisible();
   await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
+});
+
+test("refresh explains a wait on Orders and a qualifying quote requires an explicit purchase", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const copper = structuredClone(data.assets.find(asset => asset.series === "COPPER"));
+  let bid = .40;
+  await page.route("**/api/market", route => {
+    copper.market = { ...copper.market, observed: new Date().toISOString(),
+      expiry: new Date(Date.now() + 3600000).toISOString(),
+      contracts: [{ strike: 5.7, bid, ask: bid + .04 }] };
+    return route.fulfill({ json: { assets: [copper] } });
+  });
+  await start(page);
+  const status = page.locator(".order-status");
+  await button(page, "Refresh forecast").click();
+  await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
+  await expect(status.getByRole("status")).toContainText("still waiting");
+  await expect(status).toContainText("42%");
+  bid = .72;
+  await button(page, "Refresh forecast").click();
+  await expect(status.getByRole("status")).toContainText("Conditions met");
+  const state = () => page.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")));
+  expect((await state()).used).toBe(0);
+  await button(page, "Place demo order · $5.80").click();
+  await expect(status.getByRole("heading", { name: "Funds held" })).toBeFocused();
+  await expect(status).toContainText("$5.80 in demo funds is reserved for 1 lb of Copper");
+  expect((await state()).used).toBe(580);
+  await button(page, "Activity").click();
+  await expect(page.getByRole("heading", { name: "Forecast checked" })).toHaveCount(2);
+});
+
+test("a blocked cutoff attempt keeps the buyer on Orders with a way to fix it", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page);
+  await button(page, "Budget").click();
+  await button(page, "Pause").click();
+  await button(page, "Orders").click();
+  await page.getByText("Try deadline scenario").click();
+  await button(page, "Simulate cutoff order").click();
+  await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".order-status")).toContainText("Your purchasing allowance is paused");
+  await expect(page.locator(".order-status").getByRole("status")).toContainText("No funds were reserved");
+  await button(page, "Review budget").click();
+  await expect(button(page, "Resume")).toBeVisible();
+});
+
+test("a market bubble opens a contextual sparrow chat and returns to the same order", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const silver = structuredClone(data.assets.find(a => a.series === "XAG"));
+  silver.market.observed = new Date().toISOString();
+  silver.market.expiry = new Date(Date.now() + 3600000).toISOString();
+  silver.market.contracts = [{ strike: 47, bid: .40, ask: .44 }];
+  await page.route("**/api/market", route => route.fulfill({ json: { assets: [silver] } }));
+  const requests = [];
+  await page.route("**/api/chat", route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { reply: "Silver has its own contract. Your copper order uses a separate forecast." } });
+  });
+  await start(page);
+  const before = await page.evaluate(() => localStorage.getItem("forestock.v1"));
+  const bubble = page.locator(".market-bubble").first();
+  await expect(bubble).toContainText("Live quote");
+  await expect(bubble).toContainText("Silver at $47");
+  await expect(bubble).toContainText("42%");
+  await expect(page.locator(".market-bubble").nth(1)).toContainText("Recorded");
+  await bubble.click();
+  await expect(page.getByRole("heading", { name: "Market chat" })).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("42%");
+  await button(page, "How does this affect my order?").click();
+  await expect(page.getByRole("log")).toContainText("separate forecast");
+  expect(requests[0].marketContext).toContain("1 lb of Copper");
+  expect(requests[0].marketContext).toContain("Silver at $47");
+  await button(page, "Back to Orders").click();
+  await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
+  await expect(button(page, "Chat with the sparrow")).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem("forestock.v1"))).toBe(before);
+  await button(page, "Chat with the sparrow").click();
+  await expect(page.getByRole("log")).toContainText("separate forecast");
+  await expect(button(page, "Review order")).toHaveCount(0);
 });

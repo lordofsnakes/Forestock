@@ -11,7 +11,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   const restart = document.querySelector("#restart");
   const locked = status !== "Watching";
   const history = [];
-  let draft, pending;
+  let draft, pending, marketId, marketContext;
 
   function say(content, role = "assistant") {
     const line = document.createElement("p");
@@ -60,6 +60,17 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   }
 
   function refreshSuggestions() {
+    if (marketContext) {
+      draftDetails.hidden = true;
+      suggestions.replaceChildren();
+      if (!pending) {
+        const followUp = document.createElement("button");
+        followUp.textContent = "How does this affect my order?";
+        followUp.onclick = () => { input.value = followUp.textContent; form.requestSubmit(); };
+        suggestions.append(followUp);
+      }
+      return;
+    }
     draftDetails.hidden = !draft.series && !draft.additional?.length && draft.allowance === null;
     printLine("draftNeeds", lines().map(line => {
       const asset = selected(line);
@@ -119,19 +130,38 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     refreshSuggestions();
   }
 
-  function begin() {
+  function resetComposer() {
     pending?.abort();
     pending = null;
-    history.length = 0;
     speech.finish();
     draftDetails.open = false;
-    messages.replaceChildren();
-    draft = { series: locked ? material.series : null, quantity: locked ? quantity : null, allowance: null };
     input.value = "";
     input.placeholder = "Message your sparrow…";
     send.disabled = false;
     send.textContent = "Send";
     restart.hidden = true;
+  }
+
+  function marketConversation(id, opening, context, orderDraft) {
+    resetComposer();
+    if (marketId !== id) {
+      history.length = 0;
+      messages.replaceChildren();
+    }
+    marketId = id;
+    marketContext = context;
+    draft = orderDraft;
+    document.querySelector("#backToOrders").hidden = false;
+    document.querySelector("#welcomeTitle").textContent = "Market chat";
+    if (history.at(-1)?.content !== opening) say(opening);
+    refreshSuggestions();
+  }
+
+  function begin() {
+    resetComposer();
+    history.length = 0;
+    messages.replaceChildren();
+    draft = { series: locked ? material.series : null, quantity: locked ? quantity : null, allowance: null };
     if (locked) say("Welcome back. Your order for " + quantity + " " + material.unit + " of " + material.name +
       " is " + status.toLowerCase() + ". What weekly allowance should I use?");
     else say(returning ? "Welcome back. You last chose " + material.name + ". What do you need this time?"
@@ -143,13 +173,13 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     event.preventDefault();
     const text = input.value.trim();
     if (!text || pending) return;
-    if (ready() && /^(yes|confirm|review order)[.!]?$/i.test(text)) {
+    if (!marketContext && ready() && /^(yes|confirm|review order)[.!]?$/i.test(text)) {
       review();
       return;
     }
     say(text, "user");
     input.value = "";
-    restart.hidden = false;
+    restart.hidden = Boolean(marketContext);
     const request = new AbortController();
     pending = request;
     send.disabled = true;
@@ -161,14 +191,14 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       const response = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: request.signal,
-        body: JSON.stringify({ messages: history, draft, locked, localDate,
+        body: JSON.stringify({ messages: history, draft, locked, localDate, marketContext,
           catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
         }),
       });
       const result = await response.json();
       if (!response.ok) throw Error(result.code || "unavailable");
       if (request !== pending) return;
-      draft = result.draft;
+      if (!marketContext) draft = result.draft;
       say(result.reply);
     } catch (error) {
       if (request !== pending) return;
@@ -188,5 +218,5 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   });
   restart.onclick = begin;
   begin();
-  return { refreshSuggestions };
+  return { refreshSuggestions, marketConversation, leaveMarket: resetComposer };
 }

@@ -20,13 +20,13 @@ export function evaluate(s, m, t, marketTime = t) {
     price = o.asset?.price ?? 580,
     premium = o.asset?.premium ?? 12,
     total = o.qty * price;
-  const block = (reason) => ({ kind: "Blocked", reason });
-  if (s.paused) return block("Your purchasing allowance is paused.");
+  const block = (reason, fix = "edit") => ({ kind: "Blocked", reason, fix });
+  if (s.paused) return block("Your purchasing allowance is paused.", "budget");
   if (o.cap < price)
     return block("The supplier quote exceeds your unit-price limit.");
   if (o.qty > 500) return block("The supplier has only 500 units available.");
   if (total > Math.min(s.balance, s.limit - s.used))
-    return block("The order exceeds your available purchasing funds.");
+    return block("The order exceeds your available purchasing funds.", "budget");
   const cutoff = o.due - day;
   if (t > cutoff + 60000)
     return block("The supplier can no longer meet your delivery deadline.");

@@ -128,12 +128,11 @@ function current() {
 function selected(f) {
   return assets.find((a) => a.series === f.elements.asset.value) || current();
 }
-function forecast(t = now()) {
-  const series = current().series;
+function forecast(t = now(), series = current().series, preferRecording = order().preferRecording) {
   const latest = assets.find(asset => asset.series === series)?.market;
   const recording = baseline.find(asset => asset.series === series)?.market;
   const live = currentQuote(latest, t) ? latest : null;
-  const replay = Boolean(recording?.contracts?.length && (order().preferRecording || !live));
+  const replay = Boolean(recording?.contracts?.length && (preferRecording || !live));
   return { market: replay ? recording : live, replay, canSwitch: Boolean(live && recording?.contracts?.length) };
 }
 function updatePicker(f) {
@@ -207,7 +206,67 @@ function needsOverview() {
     (closed.length ? '<details><summary>Completed needs (' + closed.length + ')</summary>' +
       closed.map(entry).join("") + '</details>' : '') + '</section>';
 }
-function render() {
+// Keep each button attached to the exact snapshot the buyer saw, even at expiry.
+let marketNotes = [];
+function sparrowUpdates() {
+  const selectedSeries = current().series;
+  const timestamp = now();
+  marketNotes = assets.flatMap(asset => {
+    const { market, replay } = forecast(timestamp, asset.series, asset.series === selectedSeries && order().preferRecording);
+    if (!market) return [];
+    // Pick the two-sided contract closest to even odds to surface an uncertain outcome.
+    const contract = market.contracts.reduce((best, c) =>
+      Math.abs(c.bid + c.ask - 1) < Math.abs(best.bid + best.ask - 1) ? c : best);
+    const chance = Math.round((contract.bid + contract.ask) * 50);
+    const label = (replay ? "Recorded" : "Live quote") + " · " + dt(market.observed);
+    const text = asset.name + " at $" + contract.strike.toLocaleString("en-US", { maximumFractionDigits: 4 }) +
+      "/" + asset.unit + " or higher by " + dt(market.expiry) + "? " + (replay ? "The recorded odds were " : "The market puts it at ") + chance + "%.";
+    return [{ series: asset.series, replay, label, text }];
+  }).sort((a, b) => Number(a.replay) - Number(b.replay) ||
+    Number(a.series === selectedSeries) - Number(b.series === selectedSeries));
+  if (!marketNotes.length) marketNotes.push({ label: "Market update", text: "I don’t have a qualifying quote yet. Ask me about your order timing." });
+  return '<aside class="market-updates" aria-label="Market updates from the sparrow">' +
+    '<button class="bird order-bird" data-note="0" aria-label="Chat with the sparrow"><span></span></button>' +
+    '<div><h3>Ask the sparrow</h3>' + marketNotes.slice(0, 2).map((note, i) =>
+      '<button class="market-bubble" data-note="' + i + '"><small>' + esc(note.label) +
+      '</small><span>' + esc(note.text) + '</span></button>').join("") + '</div></aside>';
+}
+
+function openMarketChat(note) {
+  const o = order();
+  const source = forecast();
+  const selectedOrigin = source.market ? (source.replay ? "Recorded" : "Live") + " as of " + dt(source.market.observed) + ". " : "";
+  const snapshot = marketNotes.slice(0, 6).map(n => n.label + ". " + n.text).join("\n");
+  const context = "Selected order: " + o.qty + " " + current().unit + " of " + current().name +
+    ", status " + o.status + ", needed by " + dt(o.due) + ". Simulated supplier total: " + money(o.qty * current().price) +
+    ". Available demo budget: " + money(available()) + ". " + (o.status === "Watching" ? selectedOrigin + assessment(source).reason : "") +
+    "\nTapped update: " + note.label + ". " + note.text + "\nQuotes on Orders:\n" + snapshot;
+  chat.marketConversation(o.id, note.label + ". " + note.text, context,
+    { series: current().series, quantity: o.qty, allowance: s.limit / 100 });
+  el.hidden = true;
+  document.querySelector("nav").hidden = true;
+  welcome.hidden = false;
+  window.scrollTo(0, 0);
+  document.querySelector("#welcomeTitle").focus();
+}
+
+document.querySelector("#backToOrders").onclick = () => {
+  chat.leaveMarket();
+  welcome.hidden = true;
+  document.querySelector("nav").hidden = false;
+  el.hidden = false;
+  render();
+  el.querySelector(".order-bird").focus();
+};
+
+function orderActions(decision, total) {
+  const edit = btn("Edit need", "edit");
+  if (decision.kind === "Buy") return btn("Place demo order · " + money(total), "place", true) + edit;
+  if (decision.kind === "Wait") return btn("Refresh forecast", "check", true) + edit;
+  return decision.fix === "budget" ? btn("Review budget", "budget", true) + edit : btn("Edit need", "edit", true);
+}
+
+function render(check) {
   if (inSetup) return;
   const expanded = new Set(
     [...el.querySelectorAll("details[open] summary")].map((n) => n.textContent),
@@ -222,11 +281,11 @@ function render() {
   if (tab === "Orders") {
     const source = forecast();
     const { market, replay } = source;
-    const d = assessment(source),
+    const d = check || assessment(source),
       open = o.status === "Watching",
       held = o.status === "Held";
     el.innerHTML =
-      needsOverview() + '<section class="order-status"><div class="order-heading"><div><p class="hint">' + esc(name) + ' order</p><h2>' +
+      needsOverview() + '<section class="order-status"><div class="order-heading"><div><p class="hint">' + esc(name) + ' order</p><h2 tabindex="-1">' +
       (open
         ? ({Buy:"Ready to order",Wait:"Watching the market",Blocked:"Order needs attention"}[d.kind])
         : held
@@ -234,17 +293,20 @@ function render() {
           : o.status === "Paid"
             ? "Supplier receipt"
             : "Funds returned") +
-      '</h2></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></div><p>' +
+      '</h2></div></div><p>' +
       esc(
         open
           ? d.reason
           : held
-            ? "Waiting for the simulated supplier to accept the order."
+            ? money(total) + " in demo funds is reserved for " + o.qty + " " + unit + " of " + name + ". Accept the order below to simulate supplier confirmation."
             : o.status === "Paid"
               ? "The supplier accepted your order."
               : "The supplier declined the order.",
       ) +
-      '</p><p class="hint">' +
+      "</p>" +
+      (check && open ? '<p class="check-result" role="status">' +
+        ({ Wait: "Checked just now. Your order is still waiting.", Blocked: "Order blocked. No funds were reserved.", Buy: "Conditions met. You can place this order." }[check.kind]) + "</p>" : "") +
+      '<p class="hint">' +
       (open && replay ? "Simulated purchase · Recorded forecast from " + dt(market.observed)
         : o.replayObserved && !open ? "Simulated purchase · Used forecast recorded " + dt(o.replayObserved)
         : "Simulated purchase") + "</p>" +
@@ -252,17 +314,17 @@ function render() {
         (replay ? "Use live forecast" : "Use recorded forecast") + "</button>" : "") +
       '<div class="actions">' +
       (open
-        ? btn("Run decision", "run", true) + btn("Edit need", "edit")
+        ? orderActions(d, total)
         : held
           ? btn("Decline", "decline") + btn("Accept order", "accept", true)
           : btn("New material need", "add", true)) +
       "</div>" +
       (open
-        ? "<details><summary>Try deadline scenario</summary><p>Preview the decision at the last safe ordering time.</p>" +
-          btn("Run at cutoff", "cutoff") +
+        ? "<details><summary>Try deadline scenario</summary><p>Try the last safe ordering time. This simulation reserves demo funds if the supplier and budget checks pass.</p>" +
+          btn("Simulate cutoff order", "cutoff") +
           "</details>"
         : "") +
-      '</section><section class="card order-summary"><h2>' + esc(name) + '</h2>' +
+      '</section>' + sparrowUpdates() + '<section class="card order-summary"><h2>' + esc(name) + '</h2>' +
       row("Quantity", o.qty + " " + esc(unit)) +
       row("Order total", money(total)) +
       row("Order by", dt(o.due - day)) +
@@ -384,9 +446,13 @@ function switchTab(next) {
   };
   enter.onfinish = endTabSlide;
 }
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.hasAttribute("data-note")) {
+    openMarketChat(marketNotes[Number(b.dataset.note)]);
+    return;
+  }
   if (b.matches(".bird")) {
     animateBird(b);
     return;
@@ -427,6 +493,23 @@ document.addEventListener("click", (e) => {
     dialog.showModal();
     return;
   }
+  if (a === "budget") {
+    switchTab("Budget");
+    return;
+  }
+  if (a === "check" && o.status === "Watching") {
+    b.disabled = true;
+    b.textContent = "Checking forecast…";
+    await loadMarket();
+    if (el.hidden || tab !== "Orders" || order() !== o || o.status !== "Watching") return;
+    const source = forecast();
+    const result = assessment(source);
+    const origin = source.replay ? "Recorded forecast from " + dt(source.market.observed) + ". " : "";
+    record("Forecast checked", current().name + " · " + origin + result.reason);
+    render(result);
+    el.querySelector(".order-status h2").focus();
+    return;
+  }
   if (a === "forecast") {
     o.preferRecording = !forecast().replay;
   }
@@ -443,7 +526,7 @@ document.addEventListener("click", (e) => {
     s.limit = Math.round(Number(i.value) * 100);
     record("Allowance updated", money(s.limit) + " weekly limit.");
   }
-  if ((a === "run" || a === "cutoff") && o.status === "Watching") {
+  if ((a === "place" || a === "cutoff") && o.status === "Watching") {
     const source = forecast();
     const d = assessment(source, a === "cutoff" ? o.due - day : now());
     const recorded = source.replay && d.contract ? source.market.observed : null;
@@ -459,10 +542,9 @@ document.addEventListener("click", (e) => {
       (recorded ? "Recorded forecast from " + dt(recorded) + ". " : "") + d.reason +
         (d.kind === "Buy" ? " Held " + money(o.qty * price) + "." : ""),
     );
-    if (d.kind !== "Buy") {
-      switchTab("Activity");
-      return;
-    }
+    render(d);
+    el.querySelector(".order-status h2").focus();
+    return;
   }
   if (o.status === "Held" && (a === "accept" || a === "decline")) {
     if (a === "decline") {
@@ -498,7 +580,12 @@ form.addEventListener("submit", (e) => {
   dialog.close();
   render();
 });
-async function loadMarket() {
+let marketRequest;
+function loadMarket() {
+  marketRequest ??= updateMarket().finally(() => { marketRequest = null; });
+  return marketRequest;
+}
+async function updateMarket() {
   try {
     const r = await fetch("/api/market");
     if (!r.ok) throw Error();

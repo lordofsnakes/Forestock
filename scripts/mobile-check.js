@@ -31,7 +31,7 @@ try {
   await page.locator('[name="qty"]').fill("50");
   await page.getByText("Save need", { exact: true }).click();
   await page.getByText("Try deadline scenario").click();
-  await page.getByText("Run at cutoff").click();
+  await page.getByText("Simulate cutoff order").click();
   await page.getByText("Accept order").click();
   await page.reload();
   await page.getByRole("button", { name: "Manual setup" }).click();
