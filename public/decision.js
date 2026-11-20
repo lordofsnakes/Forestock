@@ -1,6 +1,11 @@
 export const price = 580,
   premium = 12,
   day = 86400000;
+export const defaultThreshold = 50;
+export function thresholdFor(order) {
+  const value = order.threshold;
+  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : defaultThreshold;
+}
 export function week(t) {
   return Math.floor((t + 3 * day) / (7 * day));
 }
@@ -14,6 +19,9 @@ export function refresh(s, t) {
 export function currentQuote(market, time) {
   return Boolean(market?.contracts?.length &&
     Math.abs(time - Date.parse(market.observed)) <= 120000 && Date.parse(market.expiry) > time);
+}
+export function midpointPercent(contract) {
+  return Number(((contract.bid + contract.ask) * 50).toFixed(8));
 }
 export function evaluate(s, m, t, marketTime = t) {
   const o = s.order,
@@ -33,7 +41,7 @@ export function evaluate(s, m, t, marketTime = t) {
   if (t >= cutoff)
     return {
       kind: "Buy",
-      reason: "Last safe ordering time reached. The offer meets your terms.",
+      reason: "The supplier needs 24 hours to deliver. It’s time to order, and the offer meets your terms.",
     };
   const sameMarket = (m?.series ?? "COPPER") === (o.asset?.series ?? "COPPER");
   const c = (sameMarket ? m : null)?.contracts
@@ -48,12 +56,14 @@ export function evaluate(s, m, t, marketTime = t) {
       kind: "Wait",
       reason: "Waiting for a current market within your purchasing window.",
     };
-  const probability = (c.bid + c.ask) / 2;
+  const probability = midpointPercent(c);
+  const threshold = thresholdFor(o);
+  const qualifies = probability >= threshold;
   return {
-    kind: probability >= 0.65 ? "Buy" : "Wait",
+    kind: qualifies ? "Buy" : "Wait",
     reason:
       "The market implies " +
-      Math.round(probability * 100) +
+      probability +
       "% for " +
       (o.asset?.name ?? "Copper") +
       " at or above $" +
@@ -61,7 +71,7 @@ export function evaluate(s, m, t, marketTime = t) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 4,
       }) +
-      (probability >= 0.65 ? ". This meets" : ". This is below") + " your 65% early-order threshold.",
+      (qualifies ? ". This meets" : ". This is below") + " your " + threshold + "% early-order threshold.",
     contract: c,
   };
 }

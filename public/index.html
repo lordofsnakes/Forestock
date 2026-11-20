@@ -132,6 +132,19 @@
       <h2 id="walletTitle">Your Arc Testnet wallet</h2>
       <button data-dismiss>Close</button>
     </dialog>
+    <dialog id="thresholdEditor" aria-labelledby="thresholdTitle">
+      <form>
+        <h2 id="thresholdTitle">Early-order threshold</h2>
+        <p>New orders start at <span id="defaultThreshold"></span>%. Lower this number to order on a smaller chance of reaching the forecast price.</p>
+        <label>Minimum market probability (%)
+          <input name="threshold" type="number" min="1" max="100" step="1" inputmode="numeric" required autofocus>
+        </label>
+        <div class="actions">
+          <button type="button" data-close>Cancel</button>
+          <button type="submit" class="primary">Save threshold</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="editor">
       <form id="orderForm">
         <h2>Material need</h2>

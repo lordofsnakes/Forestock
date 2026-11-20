@@ -144,6 +144,21 @@ button:disabled {
 .market-bubble small, .market-bubble span { display: block; }
 .market-bubble span { font-size: 14px; font-weight: 500; }
 .check-result { padding-left: 10px; border-left: 2px solid #b76532; font-weight: 600; }
+.threshold-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px 0;
+  border-width: 1px 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.threshold-setting strong { margin-left: 4px; }
+.threshold-setting span:last-child { text-decoration: underline; text-underline-offset: 3px; }
 .forecast-switch {
   background: transparent;
   border: 0;

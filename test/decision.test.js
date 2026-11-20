@@ -67,7 +67,7 @@ test("pause, stock and unit price ceilings still apply at cutoff", () => {
   }
 });
 test("weak forecasts and markets settling outside the purchasing window wait", () => {
-  const weak = { ...m, contracts: [{ strike: 5.7, bid: 0.52, ask: 0.56 }] };
+  const weak = { ...m, contracts: [{ strike: 5.7, bid: 0.46, ask: 0.50 }] };
   for (const market of [
     weak,
     { ...m, expiry: new Date(t) },
@@ -92,4 +92,16 @@ test("historical expiry fits only if the buyer has enough time left before cutof
   assert.equal(evaluate(state, recorded, today, observed).kind, "Wait");
   state.order.due += 2 * 3600000;
   assert.equal(evaluate(state, recorded, today, observed).kind, "Buy");
+});
+
+test("orders use 50% by default and qualify at their own exact threshold", () => {
+  const even = { ...m, contracts: [{ strike: 5.7, bid: .49, ask: .51 }] };
+  assert.equal(evaluate(s, even, t).kind, "Buy");
+  const stricter = { ...s, order: { ...s.order, threshold: 51 } };
+  assert.equal(evaluate(stricter, even, t).kind, "Wait");
+  assert.match(evaluate(stricter, even, t).reason, /below your 51%/);
+  const atBoundary = { ...m, contracts: [{ strike: 5.7, bid: .45, ask: .47 }] };
+  assert.equal(evaluate({ ...s, order: { ...s.order, threshold: 46 } }, atBoundary, t).kind, "Buy");
+  assert.equal(evaluate(stricter, null, t + day).kind, "Buy");
+  assert.equal(evaluate({ ...s, paused: true }, even, t).kind, "Blocked");
 });

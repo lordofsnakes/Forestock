@@ -169,7 +169,7 @@ async function tick() {
     } catch {}
     const decision = evaluate(
       {
-        order: { qty: 1, cap: 600, due: state.cutoff * 1000 + day },
+        order: { qty: 1, cap: 600, threshold: 65, due: state.cutoff * 1000 + day },
         limit: 600,
         used: 0,
         balance: 600,

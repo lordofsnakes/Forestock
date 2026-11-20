@@ -1,6 +1,6 @@
 import { flyToScreen } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
-import { day, week, refresh, evaluate, currentQuote } from "./decision.js";
+import { day, week, refresh, evaluate, currentQuote, defaultThreshold, thresholdFor, midpointPercent } from "./decision.js";
 const el = document.querySelector("#app"),
   dialog = document.querySelector("#editor"),
   form = document.querySelector("#orderForm");
@@ -34,6 +34,7 @@ function initial() {
     balance: 100000,
     paused: false,
     order: {
+      threshold: defaultThreshold,
       qty: 1,
       cap: 600,
       due: now() + 2 * day,
@@ -217,7 +218,7 @@ function sparrowUpdates() {
     // Pick the two-sided contract closest to even odds to surface an uncertain outcome.
     const contract = market.contracts.reduce((best, c) =>
       Math.abs(c.bid + c.ask - 1) < Math.abs(best.bid + best.ask - 1) ? c : best);
-    const chance = Math.round((contract.bid + contract.ask) * 50);
+    const chance = midpointPercent(contract);
     const label = (replay ? "Recorded" : "Live quote") + " · " + dt(market.observed);
     const text = asset.name + " at $" + contract.strike.toLocaleString("en-US", { maximumFractionDigits: 4 }) +
       "/" + asset.unit + " or higher by " + dt(market.expiry) + "? " + (replay ? "The recorded odds were " : "The market puts it at ") + chance + "%.";
@@ -243,7 +244,7 @@ function openMarketChat(note) {
       "Your " + current().name + " order is " + ({ Held: "awaiting supplier confirmation.", Paid: "paid.", Refunded: "refunded." }[o.status]));
   const context = "Selected order: " + o.qty + " " + current().unit + " of " + current().name +
     ", status " + o.status + ", needed by " + dt(o.due) + ". Simulated supplier total: " + money(o.qty * current().price) +
-    ". Available demo budget: " + money(available()) + ".\nOrder assessment: " + impact +
+    ". Early-order threshold: " + thresholdFor(o) + "%. Available demo budget: " + money(available()) + ".\nOrder assessment: " + impact +
     "\nTapped update: " + quote + "\nQuotes on Orders:\n" + snapshot;
   chat.marketConversation(o.id, { quote, impact }, context,
     { series: current().series, quantity: o.qty, allowance: s.limit / 100 });
@@ -314,6 +315,8 @@ function render(check) {
       (open && replay ? "Simulated purchase · Recorded forecast from " + dt(market.observed)
         : o.replayObserved && !open ? "Simulated purchase · Used forecast recorded " + dt(o.replayObserved)
         : "Simulated purchase") + "</p>" +
+      (open ? '<button class="threshold-setting" data-action="threshold"><span>Early-order threshold <strong>' +
+        thresholdFor(o) + '%</strong></span><span>Change</span></button>' : "") +
       (open && source.canSwitch ? '<button class="forecast-switch" data-action="forecast">' +
         (replay ? "Use live forecast" : "Use recorded forecast") + "</button>" : "") +
       '<div class="actions">' +
@@ -324,8 +327,11 @@ function render(check) {
           : btn("New material need", "add", true)) +
       "</div>" +
       (open
-        ? "<details><summary>Try deadline scenario</summary><p>Try the last safe ordering time. This simulation reserves demo funds if the supplier and budget checks pass.</p>" +
-          btn("Simulate cutoff order", "cutoff") +
+        ? "<details><summary>What happens at the order deadline?</summary><p>To arrive by " +
+          dt(o.due) + ", " + esc(name) + " must be ordered by " + dt(o.due - day) +
+          ". The supplier needs 24 hours for delivery.</p><p>Try that moment now. If the price, stock and budget allow, the demo will reserve " +
+          money(total) + " for this order regardless of the forecast.</p>" +
+          btn("Simulate ordering at the deadline", "cutoff") +
           "</details>"
         : "") +
       '</section>' + sparrowUpdates() + '<section class="card order-summary"><h2>' + esc(name) + '</h2>' +
@@ -465,7 +471,7 @@ document.addEventListener("click", async (e) => {
     s.selectedId = b.dataset.need;
     fillPickers();
     render();
-    el.querySelector(".order-status").scrollIntoView({ block: "start" });
+    el.querySelector('.need-entry[aria-pressed="true"]').focus({ preventScroll: true });
     return;
   }
   if (!b.dataset.action && !b.dataset.tab && !b.hasAttribute("data-close"))
@@ -475,13 +481,20 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (b.hasAttribute("data-close")) {
-    dialog.close();
+    b.closest("dialog").close();
     return;
   }
   const { price } = current();
   const a = b.dataset.action,
     o = order();
   refresh(s, now());
+  if (a === "threshold" && o.status === "Watching") {
+    thresholdForm.elements.threshold.value = thresholdFor(o);
+    thresholdForm.querySelector("h2").textContent = current().name + " early-order threshold";
+    thresholdDialog.showModal();
+    thresholdForm.elements.threshold.select();
+    return;
+  }
   if (a === "add" || (a === "edit" && o.status === "Watching")) {
     addingNeed = a === "add";
     const template = addingNeed ? initial().order : o;
@@ -563,10 +576,23 @@ document.addEventListener("click", async (e) => {
   }
   render();
 });
+const thresholdDialog = document.querySelector("#thresholdEditor");
+const thresholdForm = thresholdDialog.querySelector("form");
+thresholdDialog.querySelector("#defaultThreshold").textContent = defaultThreshold;
+thresholdForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = thresholdForm.elements.threshold.valueAsNumber;
+  if (!thresholdForm.reportValidity() || order().status !== "Watching") return;
+  order().threshold = value;
+  record("Early-order threshold updated", current().name + " · " + value + "%");
+  thresholdDialog.close();
+  render();
+  el.querySelector(".threshold-setting").focus({ preventScroll: true });
+});
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   const need = {
-    id: addingNeed ? crypto.randomUUID() : order().id,
+    ...(addingNeed ? { id: crypto.randomUUID(), threshold: defaultThreshold } : order()),
     asset: compact(selected(form)),
     qty: Number(form.qty.value),
     cap: Math.round(Number(form.cap.value) * 100),

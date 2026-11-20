@@ -72,8 +72,8 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await page.locator("#limit").fill("590");
   await button(page, "Save allowance").click();
   await button(page, "Orders").click();
-  await page.getByText("Try deadline scenario").click();
-  await button(page, "Simulate cutoff order").click();
+  await page.getByText("What happens at the order deadline?").click();
+  await button(page, "Simulate ordering at the deadline").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$584.20");
@@ -249,8 +249,8 @@ test("multiple needs survive a reload and settle against one shared balance", as
   await button(page, "Save need").click();
   await expect(page.locator(".need-entry")).toHaveCount(2);
   async function hold() {
-    const cutoff = button(page, "Simulate cutoff order");
-    if (!await cutoff.isVisible()) await page.getByText("Try deadline scenario").click();
+    const cutoff = button(page, "Simulate ordering at the deadline");
+    if (!await cutoff.isVisible()) await page.getByText("What happens at the order deadline?").click();
     await cutoff.click();
   }
   await hold();
@@ -463,8 +463,8 @@ test("a blocked cutoff attempt keeps the buyer on Orders with a way to fix it", 
   await button(page, "Budget").click();
   await button(page, "Pause").click();
   await button(page, "Orders").click();
-  await page.getByText("Try deadline scenario").click();
-  await button(page, "Simulate cutoff order").click();
+  await page.getByText("What happens at the order deadline?").click();
+  await button(page, "Simulate ordering at the deadline").click();
   await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".order-status")).toContainText("Your purchasing allowance is paused");
   await expect(page.locator(".order-status").getByRole("status")).toContainText("No funds were reserved");
@@ -505,4 +505,49 @@ test("a market bubble opens a contextual sparrow chat and returns to the same or
   await button(page, "Chat with the sparrow").click();
   await expect(page.getByRole("log")).toContainText("separate forecast");
   await expect(button(page, "Review order")).toHaveCount(0);
+});
+
+test("each need keeps its own threshold and selecting materials keeps the list in place", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/market", route => route.fulfill({ json: { assets: [] } }));
+  await start(page);
+  await button(page, "Add need").click();
+  await page.locator("#editor select").selectOption("XAG");
+  await button(page, "Save need").click();
+
+  const setting = page.getByRole("button", { name: /Early-order threshold/ });
+  const status = page.locator(".order-status");
+  await expect(setting).toContainText("50%");
+  await expect(status).toContainText("5.5%");
+  await expect(status.getByRole("heading")).toHaveText("Watching the market");
+  await setting.click();
+  const input = page.getByLabel("Minimum market probability");
+  await input.fill("0");
+  await button(page, "Save threshold").click();
+  await expect(input).toBeVisible();
+  await input.fill("5");
+  await button(page, "Save threshold").click();
+  await expect(status.getByRole("heading")).toHaveText("Ready to order");
+  await expect(setting).toContainText("5%");
+
+  await page.evaluate(() => window.scrollTo(0, 64));
+  const scroll = await page.evaluate(() => window.scrollY);
+  const entry = name => page.locator(".need-entry").filter({ hasText: name });
+  for (const [name, value] of [["Copper", "50%"], ["Silver", "5%"]]) {
+    await entry(name).click();
+    await expect(entry(name)).toBeFocused();
+    expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+    await expect(setting).toContainText(value);
+  }
+  await button(page, "Edit need").click();
+  await button(page, "Save need").click();
+  await expect(setting).toContainText("5%");
+  await page.reload();
+  await button(page, "Manual setup").click();
+  await button(page, "Continue with demo balance").click();
+  await finishSetup(page);
+  await entry("Silver").first().click();
+  await expect(setting).toContainText("5%");
+  await button(page, "Place demo order · $" + (data.assets.find(a => a.series === "XAG").price / 100).toFixed(2)).click();
+  await expect(status.getByRole("heading")).toHaveText("Funds held");
 });
