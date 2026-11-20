@@ -39,10 +39,12 @@
           </svg>
         </span>
       </button><div id="guideMessage" aria-live="polite"></div></div>
-        <div id="lines"></div>
+        <ul id="lines" aria-label="Order items"></ul>
         <form id="approve">
-          <div class="row"><span>Into escrow</span><strong id="depositSummary"></strong></div>
-          <details id="orderTerms"><summary>Edit buying rules <span id="termsSummary"></span></summary>
+          <div class="review-deposit"><span>Escrow deposit</span><strong id="depositSummary"></strong></div>
+          <details id="orderTerms"><summary><span>Buying rules</span><small id="termsSummary"></small></summary>
+          <div class="review-settings">
+          <div id="priceCaps"></div>
           <label
             >Weekly spending limit (test USDC)<input
               name="limit"
@@ -69,12 +71,13 @@
               required
           /></label>
           <p class="hint">A lower threshold can qualify your order sooner. Your price and budget limits still apply.</p>
-          </details>
           <label class="arc-checkbox"
-            ><input type="checkbox" name="recording" />Allow a dated forecast
-            when a live quote is unavailable</label
+            ><input type="checkbox" name="recording" />Use a dated forecast if a live quote is unavailable</label
           >
           <p id="reviewBalance"></p>
+          <p class="hint">The agent reserves funds within your limits. The test supplier is paid on acceptance.</p>
+          </div>
+          </details>
           <section id="fundingHelp" hidden aria-labelledby="fundingTitle">
             <h3 id="fundingTitle">Fund your passkey wallet</h3>
             <p id="fundingReason"></p>
@@ -85,9 +88,8 @@
             <button type="button" id="checkBalance">Check balance</button>
             <span id="balanceResult" role="status"></span>
           </section>
-          <p>Your agent can reserve funds within these limits. The test supplier receives payment when it accepts.</p>
-          <button id="authorize" class="primary" disabled>Authorize with passkey</button>
-          <button type="button" id="discard">Discard draft</button>
+          <div class="review-actions"><button id="authorize" class="primary" disabled>Authorize with passkey</button>
+          <button type="button" id="discard">Discard draft</button></div>
         </form>
       </section>
       <section id="orders" class="card">

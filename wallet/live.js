@@ -210,16 +210,16 @@ function updateApproval() {
   $("authorize").disabled = !valid || needsFunds || working;
   $("fundingHelp").hidden = !needsFunds;
   $("depositSummary").textContent = valid ? amount(deposit) + " test USDC" : "Choose a deposit";
-  $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%";
+  $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%" + (f.elements.recording.checked ? " · Dated forecast allowed" : "");
   if (needsFunds) {
     $("fundingReason").textContent = "Your wallet has " + amount(funds.wallet) + " test USDC. " +
       (funds.wallet < deposit ? "The deposit needs " + amount(deposit) + ", plus the network fee." :
         feeShort ? "Arc reported insufficient funds for the network fee. Add funds or lower the deposit." :
         "Leave some test USDC in your wallet for the network fee.");
-    say("Your draft is saved. Add test USDC to your wallet, then I can help you authorize this order.");
+    say("Your draft is saved. Add funds to authorize it.");
   } else if (valid) {
-    say(reconnect ? "Reconnect this wallet once, then you can authorize your order." :
-      "Review your limits, then use your passkey to let me watch for the right time to buy.");
+    say(reconnect ? "First, reconnect your passkey." :
+      "I’ll watch for a buying opportunity within your limits.");
   }
 }
 $("approve").addEventListener("input", updateApproval);
@@ -269,21 +269,14 @@ function showDraft() {
     .map((line) => {
       const cents = totalCents(line.quantity, line.price);
       cost += BigInt(cents) * 10n ** 16n;
-      return (
-        "<p><strong>" +
-        escape(line.name) +
-        "</strong> · " +
-        escape(line.quantity + " " + line.unit) +
-        " · " +
-        usd(cents) +
-        "<br>Maximum unit price " +
-        usd(line.cap) +
-        " · order by " +
-        date(line.orderBy) +
-        "</p>"
-      );
+      return '<li><div class="review-item"><strong>' + escape(line.name) + '</strong><b>' + usd(cents) +
+        '</b></div><div class="review-item-meta"><span>' + escape(line.quantity + " " + line.unit) +
+        '</span><span>Order by ' + date(line.orderBy) + '</span></div></li>';
     })
     .join("");
+  $("priceCaps").innerHTML = draft.lines.map(line =>
+    '<p>Maximum price for ' + escape(line.name) + ' <strong>' + usd(line.cap) + ' / ' + escape(line.unit) + '</strong></p>'
+  ).join("");
   if (!previewInitialized) {
     $("approve").elements.limit.value = draft.allowance;
     $("approve").elements.deposit.value = formatEther(

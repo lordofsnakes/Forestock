@@ -96,7 +96,18 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   await expect(page.locator("#fundingAddress")).toHaveText(buyer);
   await expect(authorize).toBeDisabled();
   await expect(page.getByRole("link", {name:"Open Circle faucet"})).toHaveAttribute("href","https://faucet.circle.com/");
+  await expect(page.getByText("Escrow deposit", {exact:true})).toBeVisible();
+  await expect(page.locator("#lines")).toContainText("Order by");
+  const recording = page.locator("#approve [name=recording]");
+  await expect(recording).toBeHidden();
+  await expect(recording).not.toBeChecked();
   await page.locator("#orderTerms summary").click();
+  await expect(page.locator("#priceCaps")).toContainText("$6.00 / lb");
+  await recording.check();
+  await page.locator("#orderTerms summary").click();
+  await expect(page.locator("#termsSummary")).toContainText("Dated forecast allowed");
+  await page.locator("#orderTerms summary").click();
+  await recording.uncheck();
   await page.locator("#approve [name=deposit]").fill("0");
   await expect(page.locator("#fundingReason")).toContainText("network fee");
   await expect(authorize).toBeDisabled();

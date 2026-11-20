@@ -527,7 +527,7 @@ select {
 #arc a { color: #733f22; }
 
 #guide .speaker-turn {
-  --speaker-size: clamp(100px, 28vw, 150px);
+  --speaker-size: clamp(76px, 21vw, 106px);
   display: grid;
   grid-template-columns: calc(var(--speaker-size) * .94) minmax(0, 1fr);
   min-height: var(--speaker-size);
@@ -536,8 +536,27 @@ select {
 }
 #guide .portrait { grid-area: 1 / 1; width: var(--speaker-size); }
 #guide .speech { max-width: 32ch; font-size: clamp(16px, 4vw, 19px); }
-#arc #orderTerms summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-#termsSummary, #reviewBalance { color: #69574a; font-size: .9rem; }
+#review { max-width: 38rem; margin: 12px 0 28px; padding: 0 0 24px; }
+#review #guide { margin-bottom: 18px; }
+#lines { padding: 0; margin: 0; list-style: none; }
+#lines li { padding: 14px 0; border-top: 1px solid #dfd0bb; }
+.review-item, .review-item-meta, .review-deposit { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.review-item { font-size: 1.15rem; }
+.review-item b { font-weight: 600; }
+.review-item-meta { flex-wrap: wrap; margin-top: 3px; color: #69574a; font-size: .87rem; }
+.review-deposit { padding: 14px 0; border-block: 1px solid #dfd0bb; }
+.review-deposit strong { text-align: right; }
+#orderTerms > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) 8px; align-items: center; gap: 12px; padding: 12px 3px 12px 0; list-style: none; }
+#orderTerms > summary::-webkit-details-marker { display: none; }
+#orderTerms > summary::after { content: ""; border: solid currentColor; border-width: 0 1.5px 1.5px 0; width: 6px; height: 6px; transform: rotate(45deg); }
+#orderTerms[open] > summary::after { transform: rotate(225deg); }
+#termsSummary { color: #69574a; font-size: .85rem; text-align: right; }
+.review-settings { padding: 6px 0 14px; border-bottom: 1px solid #dfd0bb; }
+#priceCaps, #reviewBalance { color: #69574a; font-size: .9rem; }
+.review-actions { display: grid; justify-items: center; gap: 3px; margin-top: 16px; }
+.review-actions .primary { width: 100%; min-height: 48px; }
+#discard { background: transparent; border: 0; font-size: .88rem; font-weight: 500; color: #69574a; }
+#discard:hover, #discard:focus-visible { text-decoration: underline; }
 #fundingHelp { border-left: 2px solid #b76532; padding: 4px 0 6px 14px; margin: 16px 0; }
 #fundingHelp .actions { align-items: center; gap: 12px; }
 #fundingAddress { display: block; overflow-wrap: anywhere; user-select: all; font-size: .9rem; }
