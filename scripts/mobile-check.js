@@ -21,7 +21,9 @@ try {
       .evaluate((b) => b.classList.contains("flying")),
     true,
   );
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Copper", exact: true }).click();
+  await page.getByRole("button", { name: "100 lb", exact: true }).click();
+  await page.getByRole("button", { name: "600 USDC", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("button", { name: "Edit need" }).click();
   await page.locator('[name="qty"]').fill("50");
@@ -30,7 +32,7 @@ try {
   await page.getByText("Run at cutoff").click();
   await page.getByText("Accept order").click();
   await page.reload();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "600 USDC", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("heading", { name: "Supplier receipt" }).waitFor();
   await page.getByRole("button", { name: /Budget/ }).click();

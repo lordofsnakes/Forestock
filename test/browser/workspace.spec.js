@@ -1,14 +1,24 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 const data = JSON.parse(fs.readFileSync("public/commodities.json"));
+async function send(page, text) {
+  await page.getByRole("textbox", { name: "Your message" }).fill(text);
+  await button(page, "Send").click();
+}
 async function start(page, asset = "COPPER") {
   await page.goto("/");
-  await page.locator("#setup select").selectOption(asset);
+  await button(page, data.assets.find(a => a.series === asset).name).click();
   await finishSetup(page);
 }
 async function finishSetup(page) {
   await expect(page.getByRole("navigation")).toBeHidden();
-  await button(page, "Next").click();
+  if (await page.getByPlaceholder("e.g. I need copper").isVisible()) {
+    await button(page, "Copper").click();
+  }
+  if (await page.getByPlaceholder(/^Quantity in /).isVisible()) {
+    await page.locator("#suggestions button").first().click();
+  }
+  await page.locator("#suggestions button").filter({ hasText: "USDC" }).click();
   await button(page, "Review order").click();
 }
 const button = (page, name) => page.getByRole("button", { name, exact: true });
@@ -32,7 +42,7 @@ test("all six materials have units, editable quantities and persistent supplier 
     await page.locator('[name="qty"]').fill("2");
     await page.locator('[name="notes"]').fill("Morning delivery");
     await button(page, "Save need").click();
-    await expect(page.locator(".big")).toHaveText("2 " + unit);
+    await expect(page.locator(".order-summary")).toContainText("2 " + unit);
   }
   await page.reload();
   await finishSetup(page);
@@ -106,8 +116,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
   ).toBeVisible();
   await button(page, "Run decision").click();
   await page.reload();
-  await expect(page.locator("#setup select")).toBeDisabled();
-  await expect(page.locator('[name="quantity"]')).toBeDisabled();
+  await expect(page.getByRole("log")).toContainText("is held");
   await finishSetup(page);
   await button(page, "Accept order").click();
   await page.reload();
@@ -147,10 +156,9 @@ test("legacy orders require onboarding; mascot respects reduced motion", async (
     ),
   );
   await page.reload();
-  await button(page, "Next").click();
-  await expect(page.locator("#allowanceStep")).toHaveCSS("animation-name", "none");
-  await button(page, "Review order").click();
-  await expect(page.locator(".big")).toHaveText("7 lb");
+  await expect(page.locator(".message").last()).toHaveCSS("animation-name", "none");
+  await finishSetup(page);
+  await expect(page.locator(".order-summary")).toContainText("7 lb");
   await expect(page.locator("#welcome")).toBeHidden();
 });
 test("home-screen metadata and public receipts are reachable from the phone layout", async ({
@@ -187,22 +195,21 @@ test("onboarding validates quantity and budget, supports mascot tap and preserve
   const bird = button(page, "Animate the copper-winged sparrow");
   await bird.click();
   await expect(bird).toHaveClass(/flying/);
-  await page.locator('[name="quantity"]').fill("0");
-  await button(page, "Next").click();
-  await expect(page.locator("#materialStep")).toBeVisible();
-  await page.locator('[name="quantity"]').fill("25");
-  await button(page, "Next").click();
-  await expect(page.locator("#allowanceStep")).toHaveCSS("animation-name", "step-in");
-  await page.locator('[name="allowance"]').fill("-1");
-  await button(page, "Review order").click();
-  await expect(page.locator("#allowanceStep")).toBeVisible();
-  await page.locator('[name="allowance"]').fill("150");
-  await button(page, "Back").click();
-  await expect(page.locator('[name="quantity"]')).toHaveValue("25");
-  await button(page, "Next").click();
-  await expect(page.locator('[name="allowance"]')).toHaveValue("150");
-  await button(page, "Review order").click();
-  await expect(page.locator(".big")).toHaveText("25 lb");
+  await send(page, "oil");
+  await expect(page.getByRole("log")).toContainText("pick Brent or WTI");
+  await send(page, "I need copper");
+  await send(page, "0");
+  await expect(page.getByRole("log")).toContainText("whole number");
+  await send(page, "25 pounds");
+  await send(page, "-1");
+  await expect(page.getByRole("log")).toContainText("caps what can be spent");
+  await button(page, "Start over").click();
+  await send(page, "I need 25 pounds of copper");
+  await send(page, "My budget is $150 per week");
+  await expect(page.locator(".message").last()).toHaveCSS("animation-name", "step-in");
+  await expect(page.getByRole("log")).toContainText("25 lb of Copper");
+  await send(page, "yes");
+  await expect(page.locator(".order-summary")).toContainText("25 lb");
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$150.00");
   await page.locator("#limit").fill("120");

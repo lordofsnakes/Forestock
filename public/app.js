@@ -1,3 +1,4 @@
+import { startChat } from "./setup-chat.js";
 import { day, week, refresh, evaluate } from "./decision.js";
 const el = document.querySelector("#app"),
   dialog = document.querySelector("#editor"),
@@ -35,7 +36,7 @@ function initial() {
       qty: 100,
       cap: 600,
       due: now() + 2 * day,
-      notes: "Friday cable run",
+      notes: "",
       status: "Watching",
     },
     activity: [],
@@ -47,52 +48,17 @@ let s = saved || initial(),
   market,
   replay = false;
 const welcome = document.querySelector("#welcome");
-const setup = document.querySelector("#setup");
-const materialStep = document.querySelector("#materialStep");
-const allowanceStep = document.querySelector("#allowanceStep");
-const setupBack = document.querySelector("#setupBack");
 let inSetup = true;
-
-setup.elements.quantity.value = s.order.qty;
-setup.elements.allowance.value = s.limit / 100;
-document.querySelector("#balanceHint").textContent =
-  "Practice balance · " + (s.balance / 100).toLocaleString("en-US") + " test USDC";
-const lockedOrder = s.order.status !== "Watching";
-setup.elements.asset.disabled = lockedOrder;
-setup.elements.quantity.disabled = lockedOrder;
-
-function showWorkspace() {
-  welcome.hidden = !inSetup;
-  el.hidden = inSetup;
-  document.querySelector("nav").hidden = inSetup;
-}
-function showSetupStep(toAllowance) {
-  materialStep.hidden = materialStep.disabled = toAllowance;
-  allowanceStep.hidden = allowanceStep.disabled = !toAllowance;
-  setupBack.hidden = !toAllowance;
-  document.querySelector("#setupAction").textContent = toAllowance ? "Review order" : "Next";
-  const panel = toAllowance ? allowanceStep : materialStep;
-  panel.classList.add("step-enter");
-  panel.querySelector("legend").focus();
-}
-setupBack.addEventListener("click", () => showSetupStep(false));
-setup.addEventListener("submit", (event) => {
-  event.preventDefault();
-  if (allowanceStep.hidden) {
-    showSetupStep(true);
-    return;
-  }
-  const asset = selected(setup);
-  if (!lockedOrder) {
+function finishSetup(asset, quantity, allowance) {
+  if (s.order.status === "Watching") {
     if (!saved || asset.series !== current().series) {
       s.order.asset = compact(asset);
       s.order.cap = Math.ceil(asset.price * 1.035);
     }
-    if (!saved) s.order.notes = "";
-    s.order.qty = Number(setup.elements.quantity.value);
+    s.order.qty = quantity;
   }
   syncMarket();
-  s.limit = Math.round(Number(event.target.elements.allowance.value) * 100);
+  s.limit = Math.round(allowance * 100);
   inSetup = false;
   record(
     "Workspace opened",
@@ -105,12 +71,14 @@ setup.addEventListener("submit", (event) => {
       money(s.limit) +
       " weekly allowance",
   );
-  showWorkspace();
+  welcome.hidden = true;
+  el.hidden = false;
+  document.querySelector("nav").hidden = false;
   render();
   el.classList.add("step-enter");
   el.querySelector("h1").tabIndex = -1;
   el.querySelector("h1").focus();
-});
+}
 function animateBird(button) {
   button.classList.remove("flying");
   void button.offsetWidth;
@@ -146,26 +114,25 @@ function updatePicker(f) {
   const a = selected(f);
   f.querySelectorAll("[data-unit]").forEach((n) => (n.textContent = a.unit));
 }
-function fillPickers() {
-  for (const f of [document.querySelector("#setup"), form]) {
-    const field = f.elements.asset,
-      previous = field.value || current().series;
-    const choices = [...assets];
-    if (!choices.some((a) => a.series === current().series))
-      choices.push(current());
-    field.replaceChildren(...choices.map((a) => new Option(a.name, a.series)));
-    field.value = choices.some((a) => a.series === previous)
-      ? previous
-      : choices[0].series;
-    updatePicker(f);
-  }
+function choices() {
+  return assets.some(a => a.series === current().series) ? assets : [...assets, current()];
 }
-for (const f of [document.querySelector("#setup"), form])
-  f.elements.asset.addEventListener("change", () => {
-    const a = selected(f);
-    updatePicker(f);
-    if (f === form) form.cap.value = ((a.price / 100) * 1.03).toFixed(2);
-  });
+function fillPickers() {
+  const field = form.elements.asset;
+  const previous = field.value || current().series;
+  field.replaceChildren(...choices().map(a => new Option(a.name, a.series)));
+  field.value = choices().some(a => a.series === previous) ? previous : current().series;
+  updatePicker(form);
+  if (inSetup) chat.refreshSuggestions();
+}
+form.elements.asset.addEventListener("change", () => {
+  updatePicker(form);
+  form.cap.value = ((selected(form).price / 100) * 1.03).toFixed(2);
+});
+const chat = startChat({
+  choices, material: current(), quantity: s.order.qty, allowance: s.limit / 100,
+  status: s.order.status, returning: Boolean(saved), finish: finishSetup,
+});
 fillPickers();
 function save() {
   localStorage.setItem(key, JSON.stringify(s));
@@ -221,18 +188,7 @@ function render() {
       open = o.status === "Watching",
       held = o.status === "Held";
     el.innerHTML =
-      '<h1>Purchase orders</h1><section class="hero"><div><small>' +
-      esc(name.toUpperCase()) +
-      ' REQUIREMENT</small><div class="big">' +
-      o.qty +
-      " " +
-      esc(unit) +
-      "</div><strong>" +
-      esc(o.notes || o.status) +
-      '</strong></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></section>' +
-      row("Order total", money(total)) +
-      row("Order by", dt(o.due - day)) +
-      '<section class="card"><h2>' +
+      '<section class="order-status"><div class="order-heading"><div><p class="hint">Purchase order</p><h1>' +
       (open
         ? ({Buy:"Ready to order",Wait:"Watching the market",Blocked:"Order needs attention"}[d.kind])
         : held
@@ -240,7 +196,7 @@ function render() {
           : o.status === "Paid"
             ? "Supplier receipt"
             : "Funds returned") +
-      "</h2><p>" +
+      '</h1></div><button class="bird order-bird" aria-label="Animate the order sparrow"><span></span></button></div><p>' +
       esc(
         open
           ? d.reason
@@ -262,7 +218,12 @@ function render() {
           btn("Run at cutoff", "cutoff") +
           "</details>"
         : "") +
-      '</section><section class="card"><details><summary>Order details</summary>' +
+      '</section><section class="card order-summary"><h2>' + esc(name) + '</h2>' +
+      row("Quantity", o.qty + " " + esc(unit)) +
+      row("Order total", money(total)) +
+      row("Order by", dt(o.due - day)) +
+      (o.notes ? row("Receiving notes", esc(o.notes)) : "") +
+      '<details><summary>Order details</summary>' +
       row("Supplier lead time","24 hours") +
       row("Delivered price",money(price)+" / "+esc(unit)) +
       row("Maximum price",money(o.cap)+" / "+esc(unit)) +

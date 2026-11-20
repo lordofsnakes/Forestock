@@ -219,67 +219,55 @@ nav button[aria-current="page"] {
   color: #713719;
 }
 #welcome {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: clamp(28px, 6vw, 66px) 24px 48px;
+  max-width: 660px;
+  margin: auto;
+  height: calc(100vh - 96px);
+  height: calc(100dvh - 96px);
+  min-height: 330px;
+  padding: 12px clamp(16px, 4vw, 30px) max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
 }
-.intro {
+.chat-heading, .order-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 16px;
 }
-.intro small,
-.hero small,
-.card > small {
-  letter-spacing: 0.13em;
-  font-weight: 650;
-  font-size: 11px;
+.chat-heading {
+  padding: 4px 0 16px;
+  border-bottom: 1px solid #dfd0bb;
 }
-.intro h1 {
-  font-size: clamp(43px, 7vw, 72px);
-  line-height: 1.03;
-  letter-spacing: -0.045em;
-  margin: 12px 0;
+.chat-heading h1 { margin: 0; }
+.chat-heading p { color: #69574a; margin: 2px 0 0; }
+#messages {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  padding: 20px 0 4px;
 }
-.intro-copy {
-  max-width: 48ch;
-  color: #655348;
-  margin: 4px 0 20px;
+.message {
+  width: fit-content;
+  max-width: min(89%, 46ch);
+  padding: 11px 14px;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
 }
-#setup {
-  border-top: 1px solid #ac9781;
-  padding-top: 10px;
-}
-#setup fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-#setup legend {
-  padding: 0;
-  font-size: 14px;
-  color: #69574a;
-}
-.setup-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-}
-#setup .primary {
-  display: flex;
-  gap: 36px;
-  align-items: center;
-}
+.helper { background: #eee7d9; border-radius: 2px 14px 14px; }
+.buyer { margin-left: auto; background: #774323; color: #fffaf1; border-radius: 14px 2px 14px 14px; }
+.reply-area { padding-top: 10px; border-top: 1px solid #dfd0bb; }
+#suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+#suggestions button { font-size: 14px; min-height: 40px; padding: 6px 12px; border-radius: 20px; }
+#setup { display: flex; align-items: stretch; gap: 8px; }
+#setup input { min-width: 0; margin: 0; }
+#restart { border: 0; padding: 3px 0; background: transparent; text-decoration: underline; font-size: 14px; }
+.order-heading { justify-content: space-between; }
+.order-heading h1 { line-height: 1.05; }
+.order-summary h2 { font: 28px Georgia, serif; }
 @media (prefers-reduced-motion: no-preference) {
   .step-enter {
     animation: step-in 280ms cubic-bezier(.2, .7, .2, 1);
   }
-  #materialStep {
-    --step-offset: -12px;
-  }
+  .helper { --step-offset: -8px; }
   @keyframes step-in {
     from { opacity: 0; transform: translateX(var(--step-offset, 12px)); }
     to { opacity: 1; transform: translateX(0); }
@@ -325,7 +313,7 @@ nav button[aria-current="page"] {
   transform-origin: 55% 43%;
 }
 .portrait {
-  width: clamp(125px, 36vw, 202px);
+  width: clamp(64px, 16vw, 92px);
   height: auto;
   aspect-ratio: 1;
 }

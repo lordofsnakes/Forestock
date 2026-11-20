@@ -23,42 +23,19 @@
       </div>
     </header>
     <section id="welcome" aria-labelledby="welcomeTitle">
-      <div class="intro">
-        <div>
-          <h1 id="welcomeTitle">Plan an order</h1>
-        </div>
-        <button
-          class="bird portrait"
-          aria-label="Animate the copper-winged sparrow"
-        >
-          <span></span>
-        </button>
+      <div class="chat-heading">
+        <button class="bird portrait" aria-label="Animate the copper-winged sparrow"><span></span></button>
+        <div><h1 id="welcomeTitle">Plan an order</h1><p>With your purchasing helper</p></div>
       </div>
-      <p class="intro-copy">
-        Choose a material and budget to see when to buy.
-      </p>
-      <form id="setup">
-        <fieldset id="materialStep">
-          <legend tabindex="-1">1 of 2 · Material need</legend>
-          <label>Commodity<select name="asset"></select></label>
-          <label>Quantity needed (<span data-unit>lb</span>)
-            <input name="quantity" type="number" min="1" max="10000" required />
-          </label>
-        </fieldset>
-        <fieldset id="allowanceStep" hidden disabled>
-          <legend tabindex="-1">2 of 2 · Spending allowance</legend>
-          <label>Weekly allowance (test USDC)
-            <input name="allowance" type="number" min="0" max="100000" step=".01" required />
-          </label>
-          <p class="hint" id="balanceHint"></p>
-        </fieldset>
-        <div class="setup-actions">
-          <button id="setupBack" type="button" hidden>Back</button>
-          <button class="primary" type="submit">
-            <span id="setupAction">Next</span> <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      </form>
+      <div id="messages" role="log" aria-label="Setup conversation" aria-live="polite"></div>
+      <div class="reply-area">
+        <div id="suggestions" aria-label="Suggested replies"></div>
+        <form id="setup" autocomplete="off">
+          <input name="reply" aria-label="Your message" maxlength="250" required />
+          <button class="primary">Send</button>
+        </form>
+        <button id="restart" type="button" hidden>Start over</button>
+      </div>
     </section>
     <main hidden id="app" aria-live="polite">Loading orders…</main>
     <nav hidden aria-label="Workspace">
