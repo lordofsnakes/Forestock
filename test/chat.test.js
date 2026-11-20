@@ -101,14 +101,18 @@ test("the copper impact question and a repeated follow-up reach the model with t
   const question = { role: "user", content: "How does this affect my order?" };
   const messages = [{ role: "assistant", content: facts.quote }, question];
   const input = { ...body, marketContext: "Arc Testnet. Watching. The signal is below the 50% threshold.", marketFacts: facts, messages };
-  const replies = ["{{impact}} The agent is waiting for a stronger signal.", "{{impact}} The agent is waiting for a stronger signal.", "The deadline is the other trigger. {{deadline}}"];
+  const replies = [
+    {reply: "The agent is waiting for a stronger signal."},
+    {reply: "The agent is waiting for a stronger signal."},
+    {reply: "The deadline is the other trigger.", fact: "deadline"},
+  ];
   const turns = [];
   t.mock.method(globalThis, "fetch", async (_url, options) => {
     turns.push(JSON.parse(options.body).messages);
-    return Response.json({ choices: [{ message: { content: JSON.stringify({reply: replies.shift()}) } }] });
+    return Response.json({ choices: [{ message: { content: JSON.stringify(replies.shift()) } }] });
   });
   const first = await request(input);
-  assert.deepEqual(first.data, {reply: facts.impact + " The agent is waiting for a stronger signal.", draft});
+  assert.deepEqual(first.data, {reply: "The agent is waiting for a stronger signal.", draft});
   messages.push({role: "assistant", content: first.data.reply}, question);
   const second = await request(input);
   assert.equal(second.data.reply, "The deadline is the other trigger. " + facts.deadline);
@@ -122,7 +126,7 @@ test("an unsupported numerical market claim is retried instead of echoing the op
   t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
   const marketFacts = { quote: "The midpoint was 25.5%.", impact: "Your order stays open." };
   const input = { ...body, marketContext: "Copper order", marketFacts };
-  const replies = ["25.5% is above 50%.", "{{impact}}", "100% guaranteed.", "100% guaranteed."];
+  const replies = ["25.5% is above 50%.", marketFacts.impact, "100% guaranteed.", "100% guaranteed."];
   t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: {
     content: JSON.stringify({reply: replies.shift()}),
   } }] }));
