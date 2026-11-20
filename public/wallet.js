@@ -18,16 +18,23 @@ let sdk, clientKey, busy = false, loadId = 0;
 
 function showAddress() {
   const saved = localStorage.getItem(key);
+  document.querySelector("#liveOrders").hidden = !saved;
   address.hidden = !saved || !panel.open;
   address.textContent = saved || "";
   register.hidden = Boolean(saved);
   next.hidden = !saved || panel.open;
-  demo.hidden = panel.open || Boolean(saved);
+  const practice = new URLSearchParams(location.search).get("practice") === "1";
+  demo.hidden = !practice || panel.open || Boolean(saved);
+  controls.querySelector('[data-action="reset"]').hidden = !practice;
   open.textContent = saved ? "Wallet" : "Set up wallet";
 }
 
 function startPlanning() {
   if (busy) return;
+  if (localStorage.getItem(key) && new URLSearchParams(location.search).get("plan") !== "arc") {
+    location.assign("/?plan=arc");
+    return;
+  }
   loadId++;
   const welcome = document.querySelector("#welcome");
   flyToScreen(intro, welcome, ".portrait", () => {
@@ -112,5 +119,8 @@ controls.addEventListener("click", async event => {
     buttons.forEach(b => b.disabled = false);
   }
   if (connected && !intro.hidden) startPlanning();
+  else if (connected && !document.querySelector("#app").hidden) location.assign("/arc.html");
 });
 loadWallet();
+
+if (localStorage.getItem(key) && new URLSearchParams(location.search).get("plan") === "arc") startPlanning();

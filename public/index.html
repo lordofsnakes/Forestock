@@ -21,6 +21,7 @@
           <span></span></button
         >Forestock
       </div>
+      <a id="liveOrders" hidden href="/arc.html">Arc orders</a>
       <button id="openWallet" hidden type="button">Set up wallet</button>
     </header>
     <section id="walletIntro" aria-labelledby="walletHeading">
@@ -60,8 +61,8 @@
         </div>
         <div id="manualOptions" hidden>
           <button data-login disabled>Use existing passkey</button>
-          <button data-demo>Continue with demo balance</button>
-          <button data-action="reset">Reset demo workspace</button>
+          <button data-demo hidden>Continue with demo balance</button>
+          <button data-action="reset" hidden>Reset demo workspace</button>
         </div>
         <p role="status">Preparing passkey setup…</p>
         <output aria-label="Wallet address" hidden></output>

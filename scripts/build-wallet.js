@@ -8,4 +8,11 @@ await build({
   // Circle imports ResponseError from the web3 umbrella. Use its defining package.
   alias: { web3: "web3-errors" },
 });
+await build({
+  entryPoints: ["wallet/live.js"], outfile: "public/generated/live.js",
+  format: "esm", platform: "browser", bundle: true, minify: true, target: "es2022",
+  plugins: [{ name: "shared-circle-sdk", setup(build) {
+    build.onResolve({filter: /public\/generated\/circle\.js$/}, () => ({path: "./circle.js", external: true}));
+  }}],
+});
 await writeFile("public/generated/wallet-config.json", JSON.stringify({ clientKey }));

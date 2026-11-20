@@ -6,7 +6,7 @@ async function send(page, text) {
   await button(page, "Send").click();
 }
 async function start(page, asset = "COPPER") {
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
   await button(page, data.assets.find(a => a.series === asset).name).click();
@@ -141,7 +141,7 @@ test("legacy orders require onboarding; mascot respects reduced motion", async (
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
   const bird = button(page, "Animate the copper-winged sparrow");
@@ -212,7 +212,7 @@ test("AI questions retain context, corrections update the draft and confirmation
     const draft = { series: "COPPER", quantity: requests.length === 3 ? 35 : 25, allowance: 150 };
     return route.fulfill({ json: { reply: ["Shall we review?", "Your allowance is a weekly cap.", "Updated to 35 pounds."][requests.length - 1], draft } });
   });
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
   await send(page, "Our shop needs twenty-five pounds of copper. Set aside $150 each week.");
@@ -231,7 +231,7 @@ test("AI questions retain context, corrections update the draft and confirmation
 
 test("AI outage keeps the message available for retry and quick replies still work", async ({ page }) => {
   await page.route("**/api/chat", r => r.fulfill({ status: 503, body: "{}" }));
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
   await send(page, "What is a weekly allowance?");
@@ -274,7 +274,7 @@ test("multiple needs survive a reload and settle against one shared balance", as
 
 test("the sparrow flies from the conversation to the reviewed orders", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await expect(button(page, "Continue with demo balance")).toBeHidden();
   await button(page, "Manual setup").click();
   await button(page, "Continue with demo balance").click();
@@ -338,7 +338,7 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
     reply, draft: { series: "COPPER", quantity: 25, allowance: null },
   } }));
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await button(page, "Manual setup").click();
   await button(page, "Continue with demo balance").click();
   await expect(page.locator(".portrait.speaking")).toBeVisible();
@@ -368,7 +368,7 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
 
 test("gold onboarding offers a small fractional order within the demo budget", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/?practice=1");
   await button(page, "Manual setup").click();
   await button(page, "Continue with demo balance").click();
   await button(page, "Gold").click();
@@ -567,7 +567,7 @@ test("reset clears demo data across open tabs and preserves the wallet address",
   const wallet = "0x" + "1".repeat(40);
   await page.evaluate(address => localStorage.setItem("forestock.arcWallet", address), wallet);
   const other = await context.newPage();
-  await other.goto("/#reset-demo");
+  await other.goto("/?practice=1#reset-demo");
   const reset = other.getByRole("dialog", { name: "Reset this demo workspace?" });
   await expect(reset).toBeVisible();
   await reset.getByRole("button", { name: "Cancel" }).click();
@@ -579,9 +579,11 @@ test("reset clears demo data across open tabs and preserves the wallet address",
   expect(await page.evaluate(() => localStorage.getItem("forestock.v1"))).toBe(null);
   expect(await other.evaluate(() => localStorage.getItem("forestock.arcWallet"))).toBe(wallet);
   await button(page, "Continue to order planning").click();
+  await button(page, "Copper").click();
   await finishSetup(page);
-  await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$600.00");
-  await expect(page.locator(".row").filter({ hasText: "Uncommitted balance" })).toContainText("$1,000.00");
+  await expect(page).toHaveURL(/arc\.html/);
+  expect(await page.evaluate(() => localStorage.getItem("forestock.v1"))).toBe(null);
+  const liveDraft = await page.evaluate(address => JSON.parse(localStorage.getItem("forestock.arcDraft." + address)), wallet);
+  expect(liveDraft.lines[0].quantity).toBe(.01);
   await other.close();
 });

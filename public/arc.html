@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#faf4e9" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <title>Forestock · Arc orders</title>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img src="/sparrow.png" width="48" height="48" alt="" />Forestock
+      </div>
+      <small>Arc Testnet</small>
+    </header>
+    <main id="arc">
+      <h1>Purchase orders</h1>
+      <p id="notice" role="status" aria-live="polite">
+        Reading your escrow on Arc…
+      </p>
+      <section id="review" class="card" hidden>
+        <h2>Review your order</h2>
+        <div id="lines"></div>
+        <form id="approve">
+          <label
+            >Weekly spending limit (test USDC)<input
+              name="limit"
+              type="number"
+              min="0"
+              step=".01"
+              required
+          /></label>
+          <label
+            >Move from wallet into escrow (test USDC)<input
+              name="deposit"
+              type="number"
+              min="0"
+              step=".01"
+              required
+          /></label>
+          <label
+            >Early-order threshold (%)<input
+              name="threshold"
+              type="number"
+              value="50"
+              min="1"
+              max="100"
+              required
+          /></label>
+          <label class="arc-checkbox"
+            ><input type="checkbox" name="recording" />Allow a dated forecast
+            when a live quote is unavailable</label
+          >
+          <p id="reviewBalance"></p>
+          <p>
+            Your passkey approves these needs. The agent can reserve funds up to
+            your cap. The test supplier automatically accepts eligible orders
+            and receives the held USDC.
+          </p>
+          <button class="primary">Authorize with passkey</button>
+          <button type="button" id="discard">Discard draft</button>
+        </form>
+      </section>
+      <section id="orders" class="card">
+        <div class="needs-heading">
+          <h2>Your orders</h2>
+          <a href="/?plan=arc">Add need</a>
+        </div>
+        <div id="orderList"></div>
+      </section>
+      <section class="card" id="budget" hidden>
+        <h2>Purchasing budget</h2>
+        <div id="balances"></div>
+        <details id="manage">
+          <summary>Manage allowance and funds</summary>
+          <form id="fund">
+            <label
+              >Weekly cap (test USDC, zero pauses buying)<input
+                name="limit"
+                type="number"
+                min="0"
+                step=".01"
+                required /></label
+            ><label
+              >Add to escrow (test USDC)<input
+                name="deposit"
+                value="0"
+                type="number"
+                min="0"
+                step=".01"
+                required /></label
+            ><button>Save with passkey</button>
+          </form>
+          <button id="withdraw">Withdraw uncommitted funds</button>
+        </details>
+        <details>
+          <summary>Wallet and funding</summary>
+          <p id="walletAddress"></p>
+          <a href="https://faucet.circle.com/" rel="noreferrer" target="_blank"
+            >Get Arc test USDC ↗</a
+          >
+        </details>
+      </section>
+      <section class="card" id="activity" hidden>
+        <h2>Order receipts</h2>
+        <div id="events"></div>
+      </section>
+    </main>
+    <nav aria-label="Workspace">
+      <button data-view="orders" aria-current="page">Orders</button
+      ><button data-view="budget">Budget</button
+      ><button data-view="activity">Activity</button>
+    </nav>
+    <dialog id="editThreshold">
+      <form id="thresholdForm">
+        <h2>Early-order threshold</h2>
+        <label
+          >Minimum probability (%)<input
+            name="value"
+            type="number"
+            min="1"
+            max="100"
+            required
+        /></label>
+        <p id="preview" role="status"></p>
+        <button type="button" id="closeThreshold">Cancel</button>
+        <button class="primary">Save with passkey</button>
+      </form>
+    </dialog>
+    <script type="module" src="/generated/live.js"></script>
+  </body>
+</html>

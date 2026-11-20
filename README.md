@@ -2,7 +2,17 @@
 
 [Open the mobile prototype](https://forestock-brown.vercel.app). A manufacturer enters a commodity requirement and standing weekly allowance. Gemini copper contracts inform purchase timing. The order deadline takes precedence if the supplier can still fulfill the need within the buyer's limits.
 
-## Try the demo
+## Buy on Arc Testnet
+
+Connect a Circle passkey on the home screen, plan a need with the sparrow, and review the amount, delivery cutoff, price cap and weekly spending limit. The authorization batches the deposit, limit and order terms into one smart-account operation. Native Arc test USDC in the buyer wallet pays for the deposit and network fees. A weekly limit is a ceiling, not a deposit.
+
+The agent watches signed needs, checks Gemini and the supplier quote, and places a hold against that buyer’s escrow. Live forecasts are the default. Buyers can explicitly allow a dated recording when a live quote is unavailable. The test supplier automatically accepts holds. Orders and Activity link to the confirmed hold and settlement for each need. In Budget buyers can change the cap, set it to zero to pause new holds, and withdraw uncommitted funds. Expired holds can be refunded onchain by anyone after one hour.
+
+The website is deployed on Vercel. The testnet worker runs on the presenter’s Mac under the launchd label `app.forestock.arc-testnet-agent`. It must be online for automatic purchases and settlement. It resumes from its local block checkpoint. To run it manually on an alternate host, use `node scripts/live-agent.js` from this checkout with the deployed contract’s matching testnet agent and supplier keys provisioned in `~/.config/forestock-testnet`. Run one worker at a time. The chain, escrow address and deployment receipt are in [the public network configuration](public/arc-network.json).
+
+## Browser-only practice
+
+The isolated [practice workspace](https://forestock-brown.vercel.app/?practice=1) is available through Manual setup for an unfunded walkthrough.
 
 Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time. Orders shows whether the market and supplier terms qualify for a demo purchase. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. For a repeatable forecast-driven purchase, choose **Copper**, **0.01 lb** and **600 USDC**. In Orders select **Use recorded forecast** if a live quote is showing. The November 19 recording gives a 70% probability, above the default 50% threshold. Select **Place demo order · $0.06** and **Accept order** to see the supplier receipt and the $0.06 commitment in Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
 

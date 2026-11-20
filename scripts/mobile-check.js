@@ -8,7 +8,7 @@ try {
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(process.env.APP_URL || "http://localhost:3000");
+  await page.goto(new URL("/?practice=1", process.env.APP_URL || "http://localhost:3000").href);
   await page.getByRole("button", { name: "Manual setup" }).click();
   await page.getByRole("button", { name: "Continue with demo balance" }).click();
   await page

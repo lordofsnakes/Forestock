@@ -1,7 +1,7 @@
 import { defaultQuantity, minimumQuantity, totalCents } from "./decision.js";
 import { sparrowSpeech } from "./sparrow-speech.js";
 
-export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish }) {
+export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish, live = false }) {
   const form = document.querySelector("#setup");
   const input = form.elements.reply;
   const send = form.querySelector("button");
@@ -112,7 +112,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       const label = suggested + " " + asset.unit;
       offer(label, () => pick(label, line, { quantity: suggested }));
       const quote = document.createElement("small");
-      quote.textContent = "$" + (cost / 100).toFixed(2) + " in demo funds";
+      quote.textContent = "$" + (cost / 100).toFixed(2) + (live ? " test USDC" : " in demo funds");
       suggestions.append(quote);
       if (returning && material.series === line.series && quantity !== suggested && totalCents(quantity, asset.price) <= funds) {
         const keep = "Keep " + quantity + " " + asset.unit;
@@ -200,7 +200,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       const response = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: request.signal,
-        body: JSON.stringify({ messages: history, draft, locked, localDate, marketContext, marketFacts,
+        body: JSON.stringify({ live, messages: history, draft, locked, localDate, marketContext, marketFacts,
           catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
         }),
       });
