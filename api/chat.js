@@ -1,4 +1,4 @@
-import { smallMassRequests } from "../lib/chat-quantity.js";
+import { smallMassRequests, materialDeadlines } from "../lib/chat-quantity.js";
 import { getVercelOidcToken } from "@vercel/oidc";
 
 const instruction = `You are Forestock's sparrow, a conversational purchasing helper for manufacturers.
@@ -118,7 +118,12 @@ export default async function chat(req, res) {
       clarifications.push("I’ve noted " + amount.requested + " of " + amount.name +
         (amount.dateNote ? " for the " + amount.dateNote : "") + ". The smallest order for " + amount.name + " is " + amount.minimum + ".");
     }
+    const deadlines = materialDeadlines(messages.at(-1).content, catalog);
     for (const line of [proposed, ...(proposed.additional || [])]) {
+      if (deadlines.has(line.series)) {
+        line.dueDate = deadlines.get(line.series);
+        delete line.dateNote;
+      }
       if (!line.dueDate && line.dateNote && validDate(line.dateNote)) {
         line.dueDate = line.dateNote;
         delete line.dateNote;

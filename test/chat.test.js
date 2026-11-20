@@ -70,6 +70,9 @@ test("the chat keeps incomplete material lines and buyer wording until clarified
   assert.equal(promoted.data.draft.series, "COPPER");
   assert.equal(promoted.data.draft.dueDate, "2026-11-27");
   assert.equal(promoted.data.draft.additional.length, 2);
+  delete proposal.additional[0].dateNote;
+  const dated = await request({ ...body, catalog, messages: [{ role: "user", content: "Make it 1 lb of copper by November 27, 2026." }] });
+  assert.equal(dated.data.draft.dueDate, "2026-11-27");
   proposal.additional[1].dueDate = "2026-02-31";
   assert.equal((await request({ ...body, catalog })).code, 503);
 });
