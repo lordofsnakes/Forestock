@@ -68,6 +68,7 @@
               max="100"
               required
           /></label>
+          <p class="hint">A lower threshold can qualify your order sooner. Your price and budget limits still apply.</p>
           </details>
           <label class="arc-checkbox"
             ><input type="checkbox" name="recording" />Allow a dated forecast
@@ -94,13 +95,15 @@
           <h2>Your orders</h2>
           <a data-step href="/?plan=arc">Add need</a>
         </div>
+        <div id="arcFilters"></div>
+        <p id="speedHint" class="hint" hidden></p>
+        <div id="arcMarkets"></div>
         <div id="orderList"></div>
       </section>
       <section class="card" id="budget" hidden>
         <h2>Purchasing budget</h2>
         <div id="balances"></div>
-        <details id="manage">
-          <summary>Manage allowance and funds</summary>
+        <div id="manage">
           <form id="fund">
             <label
               >Weekly cap (test USDC, zero pauses buying)<input
@@ -109,7 +112,8 @@
                 min="0"
                 step=".01"
                 required /></label
-            ><label
+            ><input id="capRange" data-expand type="range" min="0" step=".01" value="0" disabled aria-label="Adjust weekly cap">
+            <label
               >Add to escrow (test USDC)<input
                 name="deposit"
                 value="0"
@@ -117,10 +121,12 @@
                 min="0"
                 step=".01"
                 required /></label
-            ><button>Save with passkey</button>
+            ><input id="depositRange" type="range" min="0" step=".01" value="0" disabled aria-label="Adjust escrow deposit">
+            <p class="hint">The deposit slider leaves a cent in your wallet toward network fees.</p>
+            <button>Save with passkey</button>
           </form>
           <button id="withdraw">Withdraw uncommitted funds</button>
-        </details>
+        </div>
         <details>
           <summary>Wallet and funding</summary>
           <p id="walletAddress"></p>

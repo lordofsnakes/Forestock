@@ -69,7 +69,8 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   ).toBeVisible();
   await button(page, "Review budget").click();
   await button(page, "Resume").click();
-  await page.locator("#limit").fill("590");
+  await page.getByRole("slider", {name: "Adjust weekly limit"}).fill("590");
+  await expect(page.locator("#limit")).toHaveValue("590");
   await button(page, "Save allowance").click();
   await button(page, "Orders").click();
   await page.getByText("What happens at the order deadline?").click();
@@ -98,7 +99,7 @@ test("upstream failure displays dated replay and commodity-specific thresholds",
     route.fulfill({ status: 503, body: "unavailable" }),
   );
   await start(page, "XAG");
-  await page.getByText("Gemini forecast · Recorded replay").click();
+  await expect(page.getByRole("region", {name: "Gemini prediction markets"})).toContainText("Gemini · Recorded");
   await expect(page.getByText(/Silver price on/)).toBeVisible();
 });
 test("live data advances an eligible order and supplier acceptance persists", async ({
@@ -136,6 +137,14 @@ test("live data advances an eligible order and supplier acceptance persists", as
   ).toBeVisible();
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$599.94");
+  await button(page, "Activity").click();
+  await expect(page.locator(".log").filter({hasText:"simulated Copper order"}).locator(".material-mark")).toHaveText("Cu");
+  await button(page, "Orders").click();
+  await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("Watching");
+  await expect(page.getByText("No orders match these filters.")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Prediction markets"})).toBeVisible();
+  await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("Paid");
+  await expect(page.locator(".need-entry")).toBeVisible();
 });
 test("legacy orders require onboarding; mascot respects reduced motion", async ({
   page,

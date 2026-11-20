@@ -15,11 +15,13 @@ import { sparrowSpeech } from "../public/sparrow-speech.js";
 import { arcTestnet } from "viem/chains";
 import { liveAbi as abi } from "../lib/live-abi.js";
 import { liveDecision } from "../lib/live-decision.js";
-import { midpointPercent, totalCents } from "../public/decision.js";
+import { currentQuote, midpointPercent, totalCents } from "../public/decision.js";
 import {
   connectWallet, hasWalletCredential, sendEscrowCalls,
   waitEscrowOperation,
 } from "../public/generated/circle.js";
+
+import { escapeText as escape, filterControls, populateFilters, matchesOrder, purchaseMark, marketSection, showMarket, syncAmountSlider, thresholdHint } from "../public/workspace-controls.js";
 
 const $ = (id) => document.getElementById(id);
 const buyer = localStorage.getItem("forestock.arcWallet");
@@ -27,14 +29,6 @@ const client = createPublicClient({
   chain: arcTestnet,
   transport: http("https://rpc.testnet.arc.network"),
 });
-const escape = (value) =>
-  String(value).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
 const amount = (n) =>
   Number(formatEther(n)).toLocaleString("en-US", { maximumFractionDigits: 6 });
 const usd = (cents) => "$" + (cents / 100).toFixed(2);
@@ -74,6 +68,51 @@ function planReceipt(id) {
     : "";
 }
 const orders = new Map();
+const statusLabels = ["", "Watching", "Funds held", "Purchased", "Refunded", "Cancelled"];
+const filter = { material: "", status: "" };
+let marketSeries, budgetEdited = false;
+$("arcFilters").innerHTML = filterControls();
+$("arcMarkets").innerHTML = marketSection();
+$("speedHint").textContent = thresholdHint;
+$("fund").oninput = () => { budgetEdited = true; };
+function filterOrders() {
+  const materials = new Map();
+  let visible = 0, watching = false;
+  for (const card of $("orderList").querySelectorAll("article")) {
+    const { series, status, name } = card.dataset;
+    materials.set(series, name);
+    card.hidden = !matchesOrder(filter, series, status);
+    if (!card.hidden) {
+      visible++;
+      if (status === "1") watching = true;
+    }
+  }
+  populateFilters($("arcFilters"), materials, statusLabels.slice(1).map((s,i) => [String(i + 1), s]), filter);
+  $("arcFilters").hidden = materials.size === 0;
+  $("speedHint").hidden = !watching;
+  const empty = $("noMatches");
+  if (empty) empty.hidden = visible > 0;
+}
+$("arcFilters").onchange = event => {
+  filter[event.target.dataset.filter] = event.target.value;
+  filterOrders();
+  renderMarkets();
+};
+function renderMarkets() {
+  const assets = new Map((catalog || []).map(a => [a.series, a]));
+  for (const asset of liveAssets) assets.set(asset.series, asset);
+  if (!assets.size) return;
+  const series = marketSeries || filter.material || draft?.lines?.[0]?.series || $("orderList").querySelector("article")?.dataset.series;
+  const asset = assets.get(series) || assets.values().next().value;
+  const live = liveAssets.find(a => a.series === asset.series)?.market;
+  const fresh = currentQuote(live, Date.now());
+  showMarket($("arcMarkets"), [...assets.values()], asset.series,
+    fresh ? live : catalog?.find(a => a.series === asset.series)?.market, !fresh);
+}
+$("arcMarkets").onchange = event => {
+  marketSeries = event.target.value;
+  renderMarkets();
+};
 let view = "orders",
   editingId;
 function showView(next) {
@@ -314,7 +353,7 @@ async function orderCard(id, o) {
     blockReceipt(id, o.settlementBlock, "Settled"),
   ]);
   return (
-    "<article><h3>" +
+    '<article data-series="' + escape(series) + '" data-status="' + o.status + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
     escape(asset?.name || series) +
     " · " +
     escape(status) +
@@ -341,7 +380,7 @@ async function refresh() {
       read("committed", [buyer, (head.timestamp + 259200n) / 604800n]),
     ]);
     funds = { wallet, free, limit, spent };
-    if ($("notice").textContent === "Reading your escrow on Arc…") notice("");
+    if ($("notice").textContent.trim() === "Reading your escrow on Arc…") notice("");
     $("balances").textContent =
       "Wallet " +
       amount(wallet) +
@@ -352,7 +391,11 @@ async function refresh() {
       " / " +
       amount(limit) +
       " test USDC";
-    if (!$("manage").open) $("fund").elements.limit.value = formatEther(limit);
+    const {limit: capField, deposit: depositField} = $("fund").elements;
+    if (!budgetEdited) capField.value = formatEther(limit);
+    const walletCents = wallet / (10n ** 16n);
+    syncAmountSlider($("capRange"), capField, Math.max(10, 2 * Number(formatEther(limit)), Number(capField.value), Number(formatEther(wallet + free))));
+    syncAmountSlider($("depositRange"), depositField, Number(walletCents > 0n ? walletCents - 1n : 0n) / 100);
     showDraft();
     if (Date.now() - quoteTime > 60000) {
       quoteTime = Date.now();
@@ -375,24 +418,20 @@ async function refresh() {
       ids.reverse().map(async (id) => orderCard(id, await read("order", [id]))),
     );
     $("orderList").innerHTML =
-      cards.join("") || "<p>Your authorized orders will appear here.</p>";
+      cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
+    filterOrders();
+    renderMarkets();
     $("events").innerHTML =
       ids
-        .filter((id) => planReceipt(id) || receipts.has(id + "Held"))
-        .map(
-          (id) =>
-            "<p><strong>" +
-            escape(orders.get(id).asset?.name || "Order") +
-            "</strong> · " +
-            [
-              planReceipt(id),
-              receipts.get(id + "Held"),
-              receipts.get(id + "Settled"),
-            ]
-              .filter(Boolean)
-              .join(" · ") +
-            "</p>",
-        )
+        .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
+        .map(id => {
+          const { o, asset } = orders.get(id);
+          const series = hexToString(o.series, {size: 32});
+          const links = [planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
+          return '<div class="receipt-line">' + (o.status === 3 ? purchaseMark(series) : "") +
+            '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + statusLabels[o.status] +
+            (links ? "<br>" + links : "") + "</div></div>";
+        })
         .join("") ||
       "<p>Receipts appear here when the agent places an order on Arc.</p>";
   } finally {
@@ -428,6 +467,10 @@ async function confirmed(receipt, type) {
     throw Error(
       "Arc reported a failed operation. Check your balance and order terms.",
     );
+  if (type === "budget") {
+    budgetEdited = false;
+    $("fund").elements.deposit.value = "0";
+  }
   $("notice").innerHTML =
     "Confirmed on Arc. " +
     link(receipt.receipt.transactionHash, "View your transaction");
@@ -650,6 +693,8 @@ async function start() {
       "/commodities.json",
     ].map(async (path) => (await fetch(path)).json()),
   );
+  catalog = materials.assets;
+  renderMarkets();
   if (
     network.chainId !== 5042002 ||
     !isAddress(network.escrow || "") ||
@@ -658,7 +703,6 @@ async function start() {
     throw Error("Arc escrow configuration is unavailable.");
   address = network.escrow;
   key = walletConfig.clientKey;
-  catalog = materials.assets;
   if (localStorage.getItem(opKey())) await transact("resume", []);
   await refresh();
   const refreshWhenVisible = () => {

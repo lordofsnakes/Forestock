@@ -30,14 +30,14 @@ async function mockArc(page, getBalance, reads = {}) {
       };
     if (req.method === "eth_getBalance") result = toHex(parseEther(getBalance()));
     if (req.method === "eth_call") {
-      const { functionName } = decodeFunctionData({
+      const { functionName, args } = decodeFunctionData({
         abi,
         data: req.params[0].data,
       });
       result = encodeFunctionResult({
         abi,
         functionName,
-        result: reads[functionName] ?? (functionName === "list" ? [] : 0n),
+        result: typeof reads[functionName] === "function" ? reads[functionName](...args) : reads[functionName] ?? (functionName === "list" ? [] : 0n),
       });
     }
     return r.fulfill({ json: { jsonrpc: "2.0", id: req.id, result } });
@@ -171,6 +171,9 @@ test("live copper chat explains a waiting order and offers a different next ques
     return route.fulfill({json: {reply: "Your copper order stays open while the agent watches for a stronger signal."}});
   });
   await enterSavedOrders(page);
+  const board = page.getByRole("region", {name:"Gemini prediction markets"});
+  await expect(board).toContainText("Gemini · Live");
+  await expect(board).toContainText("25.5%");
   await page.getByRole("button", {name: "Ask about this order"}).click();
   await expect(page.getByRole("log")).toContainText("25.5%");
   const ask = page.getByRole("button", {name: "How does this affect my order?"});
@@ -218,4 +221,48 @@ test("reopening a standalone app returns to onboarding", async ({page}) => {
     }
   });
   await expect(page.getByRole("heading", {name: "Let’s plan a purchase"})).toBeVisible();
+});
+
+test("order filters keep markets visible, purchases get icons, and sliders preview the budget", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"reduce"});
+  const buyer = "0x" + "12".repeat(20);
+  const [paid, waiting, refunded] = ["10","20","30"].map(n => "0x" + n.repeat(32));
+  await page.addInitScript(({buyer, refunded, escrow}) => {
+    localStorage.setItem("forestock.arcWallet", buyer);
+    localStorage.setItem("forestock.arcPlan." + escrow + "." + refunded, "0x" + "ab".repeat(32));
+  }, {buyer, refunded, escrow:network.escrow});
+  await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
+  await mockArc(page, () => "1", {
+    list:[paid, waiting, refunded], weeklyLimit: parseEther("1"), free: parseEther(".5"),
+    order: id => ({buyer, series:toHex(id === paid ? "XAU" : "COPPER", {size:32}), quantityMilli:10,
+      capCents:600, orderBy:BigInt(Math.floor(Date.now()/1000)+86400), threshold:50, allowRecording:false,
+      status:id === paid ? 3 : id === waiting ? 1 : 4, holdTime:0n, holdBlock:0n, settlementBlock:0n, amount:0n}),
+  });
+  await enterSavedOrders(page);
+  const board = page.getByRole("region",{name:"Gemini prediction markets"});
+  await expect(page.locator("#speedHint")).toBeVisible();
+  await page.getByRole("combobox",{name:"Material",exact:true}).selectOption("XAU");
+  await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("1");
+  await expect(page.getByText("No orders match these filters.")).toBeVisible();
+  await expect(board).toContainText("Gemini · Recorded");
+  await page.getByLabel("Forecast material").selectOption("BRENT");
+  await expect(board).toContainText("Oil (Brent) price");
+  await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("3");
+  await expect(page.locator("#orderList article:visible")).toHaveCount(1);
+  await expect(page.locator("#orderList article:visible")).toContainText("Gold");
+  await page.getByRole("button",{name:"Activity",exact:true}).click();
+  await expect(page.locator("#events .material-mark")).toHaveCount(1);
+  await expect(page.locator("#events .receipt-line").filter({hasText:"Purchased"}).locator(".material-mark")).toHaveText("Au");
+  await expect(page.locator("#events .receipt-line").filter({hasText:"Refunded"})).toBeVisible();
+  await page.getByRole("button",{name:"Budget",exact:true}).click();
+  await page.getByRole("slider",{name:"Adjust weekly cap"}).fill("2.75");
+  await expect(page.locator("#fund [name=limit]")).toHaveValue("2.75");
+  const deposit = page.getByRole("slider",{name:"Adjust escrow deposit"});
+  await expect(deposit).toHaveAttribute("max","0.99");
+  await page.locator("#fund [name=deposit]").fill("0.12");
+  await expect(deposit).toHaveValue("0.12");
+  await expect(page.locator("#balances")).toContainText(" / 1 test USDC");
+  await page.getByRole("button",{name:"Orders",exact:true}).click();
+  await expect(page.locator("#orderList article:visible")).toHaveCount(1);
+  await expect(board).toContainText("Oil (Brent) price");
 });
