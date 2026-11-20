@@ -145,7 +145,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
   await button(page, "Orders").click();
   await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("Watching");
   await expect(page.getByText("No orders match these filters.")).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Prediction markets"})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Copper prediction market"})).toHaveCount(0);
   await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("Paid");
   await expect(page.locator(".need-entry")).toBeVisible();
 });
