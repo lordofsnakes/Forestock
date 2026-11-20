@@ -1,6 +1,14 @@
 # Forestock
 
-[Open the mobile prototype](https://forestock-brown.vercel.app). A manufacturer enters a commodity requirement and standing weekly allowance. Gemini copper contracts inform purchase timing. The order deadline takes precedence if the supplier can still fulfill the need within the buyer's limits.
+Forestock helps manufacturers decide when and how much material to buy within a weekly allowance. Sparrow uses Gemini Prediction Markets to time purchases of copper, natural gas, gold, silver, and Brent or WTI crude oil. The demo follows a copper order for a cable factory.
+
+[Watch the 2:57 demo](https://youtu.be/Ikkgnk5Kq3I) · [Open the mobile prototype](https://forestock-brown.vercel.app) · [View the Devpost submission](https://devpost.com/software/forestock)
+
+## Agent decision loop and spending authority
+
+Sparrow uses AI to draft material needs and explain forecasts. The buyer signs the quantity, deadline, unit-price cap and forecast threshold with a passkey. The purchasing worker reads the signed order, available escrow and remaining weekly budget from Arc. It checks the supplier offer and Gemini market signal, then waits or submits an onchain hold for an eligible portion. At the final ordering window it can reserve the remaining signed quantity if the supplier and spending checks still pass.
+
+The contract checks the agent signer, order status, deadline, unit price, escrow balance and weekly cap on each hold. Only the authorized supplier can accept the hold for payout before expiry. The buyer can pause future holds by setting the cap to zero. Extra stock requires another buyer signature. [Worker](scripts/live-agent.js) · [Decision rule](lib/live-decision.js) · [Escrow](contracts/ForestockLive.sol)
 
 ## Buy on Arc Testnet
 
@@ -51,7 +59,7 @@ Use Node 22+, npm and Foundry. Run `npm ci`, `npm test`, `forge test` and `npm r
 
 To run on Arc, compile with `forge build` and run `node scripts/escrow-demo.js`. It creates dedicated local demo accounts with owner-only file permissions and reports the public address to fund when required. Eight test USDC covers the initial one-pound rehearsal, role funding and gas. A separate `--refund-demo` run uses additional test funds to exercise a merchant decline. The process must remain running for an outstanding order to reach cutoff. Re-running reconciles its saved order. Use dedicated test accounts only.
 
-Vercel deploys static assets from public/ and the public Gemini endpoint from api/. No private keys or Gemini API key belong in the web deployment. Use the production alias above or the repository's linked Vercel project. Integration targets are the DeFi and Onchain Applications track, Best use of Arc and Gemini Prediction Markets.
+Vercel deploys static assets from public/ and the public Gemini endpoint from api/. No private keys or Gemini API key belong in the web deployment. Use the production alias above or the repository's linked Vercel project. The main track is Agentic Payments and AI. The chain award is Best use of Arc, and the sponsor bounty is Gemini Prediction Markets.
 
 ## Feature tests
 

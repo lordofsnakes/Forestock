@@ -12,7 +12,7 @@ Let the buyer enter an order for any commodity listed in Gemini’s active Commo
 
 | Entry | Proposed use and judging evidence |
 |---|---|
-| **DeFi and Onchain Applications** · proposed primary track | Demonstrate per-order escrow under a recurring procurement allowance. Show how a delegated agent spends against a buyer's mandate, how the contract enforces the remaining limit, and how the buyer revokes access. Document contract addresses and economic assumptions. |
+| **Agentic Payments and AI** · primary track | Demonstrate per-order escrow under a recurring procurement allowance. Show how a delegated agent spends against a buyer's mandate, how the contract enforces the remaining limit, and how the buyer revokes access. Document the autonomous decision loop and distinguish the AI draft, buyer authorization, worker transaction and supplier settlement. |
 | **Best use of Arc** · chain award | Hold test USDC on Arc testnet and demonstrate both supplier payout and buyer refund. Trace an authorized expense from the budget to a confirmed transaction and an external order receipt. |
 | **Gemini Prediction Markets** · sponsor bounty | Use commodity threshold contracts as information about possible future input costs. Show the exact contract, observed quote, relevant purchasing deadline and decision it influenced. |
 | **Official UBC Hackathon Winner** | Automatic overall consideration. Show one forecast-driven purchase from the manufacturer's phone. |

@@ -1,0 +1,11 @@
+Imagine running a cable factory in a developing country. Your copper supplier needs an answer by noon. The latest market report you can get is yesterday’s. How much do you order?
+
+I open Forestock and connect with a passkey. Sparrow can buy oil, natural gas, gold, silver, or copper. For Friday’s cable run, I tell it how much copper I need and what I can spend. In Review, I compare Arc and Base supplier quotes, including forwarding. I check the price cap, choose my weekly limit, and approve with my passkey. Now Sparrow can buy in portions while I’m away.
+
+In Orders, I can see what Sparrow is watching and ask why it’s waiting. This is how Forestock uses prediction markets as information markets when reporting is delayed or restricted. Take this November nineteenth Gemini copper contract. A sixty-eight-cent bid and a seventy-two-cent ask imply a seventy percent chance of copper finishing at five dollars seventy a pound or higher. With thresholds of fifty, sixty-seven, and eighty-four percent, two portions qualify early. The third waits.
+
+Next I open Outlook to look beyond copper prices. I can pick a tech or politics market, see which outcome traders are pricing, and read Sparrow’s take. An election forecast, for example, raises a practical question for my factory. If import rules change, will my supplier still honor today’s copper quote? If there’s a material worth investigating, one tap starts a new draft with that reasoning attached. I decide whether to approve extra stock.
+
+In Budget, I can see what’s in escrow and pause new purchases by setting my weekly cap to zero and signing the change. When an order qualifies, Sparrow checks the supplier’s price and sends the hold to Arc. The contract enforces my limits. USDC covers the order and the network fee.
+
+Finally, here’s Activity. On November twentieth, a live Gemini forecast triggered a separate test purchase. Sparrow reserved fifty-two cents on Arc. When the test supplier accepted, Circle’s CCTP delivered forty-six cents on Base Sepolia. Six cents covered forwarding. The copper delivery was simulated. I can open the receipt on my phone and see who actually got paid.

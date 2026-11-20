@@ -48,4 +48,4 @@ Persist the agent decision and order ID. After the hold confirms, submit the ord
 
 Open the HTTPS site in Safari, add it through Share → Add to Home Screen, then launch into Orders from the sparrow icon. Check the same link in Chrome, including keyboard, safe areas, refresh during confirmation and return after connectivity loss. Rehearse the four-minute demo from the PRD. Lead with the manufacturer’s deadline, reveal the Gemini evidence, then show funds held and the receipt on acceptance. Keep a dated market replay and an actual prior testnet receipt ready for a connectivity issue.
 
-**Exit check.** Record the phone walkthrough and document the live app, Gemini instrument, Arc testnet addresses, transaction evidence, simulated merchant and setup instructions. Select DeFi and Onchain Applications, Best use of Arc and Gemini Prediction Markets on submission.
+**Exit check.** Record the phone walkthrough and document the live app, Gemini instrument, Arc testnet addresses, transaction evidence, simulated merchant and setup instructions. Select Agentic Payments and AI, Best use of Arc and Gemini Prediction Markets on submission.
