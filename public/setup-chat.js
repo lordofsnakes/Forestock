@@ -10,6 +10,10 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   const draftDetails = document.querySelector("#chatDraft");
   const suggestions = document.querySelector("#suggestions");
   const restart = document.querySelector("#restart");
+  const next = document.querySelector("#nextFromChat");
+  const dialog = document.querySelector("#finishDraft");
+  const detailsForm = document.querySelector("#finishDraftForm");
+  const fields = document.querySelector("#missingTerms");
   const locked = status !== "Watching";
   const history = [];
   const answered = new Set();
@@ -52,6 +56,80 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     finish(lines().map(line => ({ asset: selected(line), quantity: line.quantity, dueDate: line.dueDate })), draft.allowance);
   }
 
+  function field(parent, labelText, name, options) {
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    const control = document.createElement(options ? "select" : "input");
+    control.name = name;
+    control.required = true;
+    if (options) control.append(...options);
+    label.append(control);
+    parent.append(label);
+    return control;
+  }
+
+  function advance() {
+    if (marketContext || pending) return;
+    if (ready()) { review(); return; }
+    fields.replaceChildren();
+    for (const [i, line] of lines().entries()) {
+      const asset = selected(line);
+      if (asset && line.quantity !== null && !line.dateNote) continue;
+      const group = document.createElement("fieldset");
+      const legend = document.createElement("legend");
+      legend.textContent = asset?.name || line.label || "Material";
+      group.append(legend);
+      fields.append(group);
+      let picker;
+      if (!asset) {
+        picker = field(group, "Choose material", "material" + i,
+          [new Option("Select a material", ""), ...choices().map(a => new Option(a.name, a.series))]);
+      }
+      if (!asset || line.quantity === null) {
+        const qty = field(group, "Quantity", "qty" + i);
+        Object.assign(qty, {type:"number", min:String(minimumQuantity), max:"10000", step:".001"});
+        if (line.amountNote) qty.placeholder = "You asked for " + line.amountNote;
+        const units = () => {
+          const unit = (asset || choices().find(a => a.series === picker.value))?.unit;
+          qty.parentElement.firstChild.textContent = unit ? "Quantity (" + unit + ")" : "Quantity";
+        };
+        units();
+        if (picker) picker.onchange = units;
+      }
+      if (line.dateNote) {
+        field(group, "Delivery date for “" + line.dateNote + "”", "date" + i).type = "date";
+      }
+    }
+    if (draft.allowance === null) {
+      const limit = field(fields, "Weekly spending allowance (test USDC)", "allowance");
+      Object.assign(limit, {type:"number", min:"0", max:"100000", step:".01", placeholder:String(allowance)});
+    }
+    dialog.showModal();
+  }
+
+  next.onclick = advance;
+  document.querySelector("#keepChatting").onclick = () => dialog.close();
+  detailsForm.onsubmit = event => {
+    event.preventDefault();
+    if (marketContext || pending || !dialog.open) return;
+    const controls = detailsForm.elements;
+    for (const [i, line] of lines().entries()) {
+      if (controls["material"+i]) line.series = controls["material"+i].value;
+      if (controls["qty"+i]) {
+        line.quantity = controls["qty"+i].valueAsNumber;
+        delete line.amountNote;
+      }
+      if (controls["date"+i]) {
+        line.dueDate = controls["date"+i].value;
+        delete line.dateNote;
+      }
+    }
+    if (controls.allowance) draft.allowance = controls.allowance.valueAsNumber;
+    dialog.close();
+    refreshSuggestions();
+    if (ready()) review();
+  };
+
   function printLine(id, value) {
     const line = document.getElementById(id);
     if (line.textContent === value) return;
@@ -63,6 +141,12 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   }
 
   function refreshSuggestions() {
+    next.hidden = Boolean(marketContext);
+    send.classList.toggle("primary", Boolean(marketContext));
+    if (!marketContext) {
+      next.disabled = Boolean(pending);
+      next.textContent = pending ? "Updating draft…" : ready() ? "Review order" : "Finish order details";
+    }
     if (marketContext) {
       draftDetails.hidden = true;
       suggestions.replaceChildren();
@@ -94,11 +178,9 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       button.onclick = action;
       suggestions.append(button);
     }
-    if (pending) return;
+    if (pending || ready()) return;
     const line = incompleteLine();
-    if (ready()) {
-      offer("Review order", review);
-    } else if (line && !selected(line)) {
+    if (line && !selected(line)) {
       for (const a of choices()) offer(a.name, () => pick(a.name, line, { series: a.series }));
     } else if (line) {
       if (line.quantity !== null || line.amountNote || draft.additional?.length) return;
@@ -188,8 +270,10 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     event.preventDefault();
     const text = input.value.trim();
     if (!text || pending) return;
-    if (!marketContext && ready() && /^(yes|confirm|review order)[.!]?$/i.test(text)) {
-      review();
+    if (!marketContext && (/^(next|continue|review(?: my| the)? order|go to (?:the )?review)[.!]?$/i.test(text) ||
+      (ready() && /^(yes|confirm)[.!]?$/i.test(text)))) {
+      input.value = "";
+      advance();
       return;
     }
     say(text, "user");
@@ -197,6 +281,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     restart.hidden = Boolean(marketContext);
     const request = new AbortController();
     pending = request;
+    const timeout = setTimeout(() => request.abort(), 32000);
     send.disabled = true;
     send.textContent = "Thinking…";
     refreshSuggestions();
@@ -221,10 +306,11 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       history.pop();
       say(marketContext ? "I couldn’t answer that just now. Your question is in the message box to try again."
         : error.message === "gateway_verification_required"
-        ? "AI chat is waiting for Forestock’s Vercel account verification. You can use a suggested reply to continue."
-        : "I couldn’t reach AI chat. Send your message again or use a suggested reply.");
+        ? "AI chat is waiting for Forestock’s Vercel account verification. You can finish your order details below."
+        : "I couldn’t reach AI chat. Try again or tap Finish order details below.");
       if (!input.value) input.value = text;
     } finally {
+      clearTimeout(timeout);
       if (request === pending) {
         pending = null;
         send.disabled = false;

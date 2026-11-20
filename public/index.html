@@ -100,9 +100,11 @@
         <div id="suggestions" aria-label="Suggested replies"></div>
         <form id="setup" autocomplete="off">
           <input name="reply" aria-label="Your message" maxlength="1000" required />
-          <button class="primary">Send</button>
+          <button>Send</button>
         </form>
-        <button id="restart" type="button" hidden>Start over</button>
+        <div class="chat-next"><button id="restart" type="button" hidden>Start over</button>
+          <button id="nextFromChat" class="primary" type="button" hidden>Finish order details</button>
+        </div>
       </div>
     </section>
     <main hidden id="app" aria-live="polite">Loading orders…</main>
@@ -111,6 +113,14 @@
       ><button data-tab="Budget">Budget</button
       ><button data-tab="Activity">Activity</button>
     </nav>
+    <dialog id="finishDraft" aria-labelledby="finishDraftTitle">
+      <form id="finishDraftForm">
+        <h2 id="finishDraftTitle">Finish order details</h2>
+        <div id="missingTerms"></div>
+        <div class="actions"><button type="button" id="keepChatting">Back to chat</button>
+          <button class="primary">Continue to review</button></div>
+      </form>
+    </dialog>
     <dialog id="walletPanel" aria-labelledby="walletTitle">
       <h2 id="walletTitle">Your Arc Testnet wallet</h2>
       <button data-dismiss>Close</button>

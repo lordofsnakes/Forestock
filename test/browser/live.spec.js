@@ -372,3 +372,44 @@ test("the sparrow dances only for eligible orders and forecast details stay with
   await expect(other.locator(".ready-dance")).toHaveCount(0);
   await expect(other).toContainText("deadline has passed");
 });
+
+test("typed planning can finish missing details and open live review without suggested replies", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"reduce"});
+  const buyer = "0x" + "12".repeat(20);
+  await page.addInitScript(buyer => localStorage.setItem("forestock.arcWallet",buyer),buyer);
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[]}}));
+  await mockArc(page,()=>"1");
+  let requests = 0;
+  await page.route("**/api/chat", r => {
+    requests++;
+    return r.fulfill({json:{reply:"Which oil and how much should I include?",draft:{
+      series:"COPPER",quantity:.02,allowance:null,additional:[{label:"oil",series:null,quantity:null,dateNote:"later next week"}]
+    }}});
+  });
+  await page.goto("/");
+  await page.getByRole("button",{name:"Continue to order planning"}).click();
+  const message = page.getByRole("textbox",{name:"Your message"});
+  await message.fill("I need 0.02 lb of copper and some oil later next week");
+  await message.press("Enter");
+  const next = page.getByRole("button",{name:"Finish order details"});
+  await next.click();
+  const dialog = page.getByRole("dialog",{name:"Finish order details"});
+  await expect(dialog.getByText("oil",{exact:true})).toBeVisible();
+  await dialog.getByRole("button",{name:"Continue to review"}).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button",{name:"Back to chat"}).click();
+  await message.fill("next");
+  await message.press("Enter");
+  await dialog.getByLabel("Choose material").selectOption("BRENT");
+  await dialog.getByLabel("Quantity (bbl)").fill("0.01");
+  const delivery = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  await dialog.getByLabel("Delivery date", {exact:false}).fill(delivery);
+  await dialog.getByLabel("Weekly spending allowance (test USDC)").fill("2");
+  await dialog.getByRole("button",{name:"Continue to review"}).click();
+  await expect(page.getByRole("heading",{name:"Review your order"})).toBeVisible();
+  await expect(page.locator("#lines li")).toHaveCount(2);
+  await expect(page.locator("#lines li").first()).toContainText("0.02 lb");
+  await expect(page.locator("#lines li").nth(1)).toContainText("Oil (Brent)");
+  await expect(page.locator("#approve [name=limit]")).toHaveValue("2");
+  expect(requests).toBe(1);
+});

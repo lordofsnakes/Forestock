@@ -297,6 +297,14 @@ nav button[aria-current="page"] {
 #suggestions button { font-size: 14px; min-height: 40px; padding: 6px 12px; border-radius: 20px; }
 #setup { display: flex; align-items: stretch; gap: 8px; }
 #setup input { min-width: 0; margin: 0; }
+.chat-next { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.chat-next:has(#nextFromChat:not([hidden])) { margin-top: 8px; }
+#nextFromChat { margin-left: auto; }
+#finishDraft { max-height: 85dvh; overflow-y: auto; }
+#finishDraft h2 { margin: 0 0 12px; }
+#finishDraft fieldset { border: 0; margin: 0; padding: 0 0 8px; min-width: 0; }
+#finishDraft legend { font-weight: 700; }
+#finishDraft select { display: block; width: 100%; margin-top: 5px; padding: 10px; font: inherit; }
 #restart { border: 0; padding: 3px 0; background: transparent; text-decoration: underline; font-size: 14px; }
 .order-heading { justify-content: space-between; }
 .order-heading h1 { line-height: 1.05; }
