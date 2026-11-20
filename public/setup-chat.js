@@ -1,7 +1,7 @@
 import { defaultQuantity, minimumQuantity, totalCents } from "./decision.js";
 import { sparrowSpeech } from "./sparrow-speech.js";
 
-export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish, live = false }) {
+export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish, initialSeries, idea, live = false }) {
   const form = document.querySelector("#setup");
   const input = form.elements.reply;
   const send = form.querySelector("button");
@@ -259,7 +259,12 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     history.length = 0;
     messages.replaceChildren();
     draft = { series: locked ? material.series : null, quantity: locked ? quantity : null, allowance: null };
-    if (locked) say("Welcome back. Your order for " + quantity + " " + material.unit + " of " + material.name +
+    const suggestion = choices().find(a => a.series === initialSeries);
+    initialSeries = undefined;
+    if (suggestion && !locked) {
+      draft.series = suggestion.series;
+      say((idea ? "From Outlook, we were considering “"+idea.title+"” ("+idea.outcome+"). " : "") + "Let’s plan a " + suggestion.name + " purchase. How much do you need, in " + suggestion.unit + "?");
+    } else if (locked) say("Welcome back. Your order for " + quantity + " " + material.unit + " of " + material.name +
       " is " + status.toLowerCase() + ". What weekly allowance should I use?");
     else say(returning ? "Welcome back. You last chose " + material.name + ". What do you need this time?"
       : "What are you buying for your next production run? Tell me what you need, or ask me how ordering works.");

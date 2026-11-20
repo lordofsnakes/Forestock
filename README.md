@@ -14,6 +14,10 @@ The agent watches signed needs, checks Gemini and the supplier quote, and places
 
 The website is deployed on Vercel. The testnet worker runs on the presenter’s Mac under the launchd label `app.forestock.arc-testnet-agent`. It must be online for automatic purchases and settlement. It resumes from its local block checkpoint. To run it manually on an alternate host, use `node scripts/live-agent.js` from this checkout with the deployed contract’s matching testnet agent and supplier keys provisioned in `~/.config/forestock-testnet`. Run one worker at a time. The chain, escrow address and deployment receipt are in [the public network configuration](public/arc-network.json).
 
+## Market outlook
+
+Outlook shows active Gemini Tech and Politics contracts with a two-sided quote, their quoted outcome, implied probability and resolution time. Ask Sparrow about the impact to get a conditional procurement interpretation and a supplier check. When a material is relevant the buyer can start a draft for that material. Only the existing order review can authorize a purchase.
+
 ## Browser-only practice
 
 The isolated [practice workspace](https://forestock-brown.vercel.app/?practice=1) is available through Manual setup for an unfunded walkthrough.
@@ -69,7 +73,7 @@ A buyer taps Create passkey wallet and approves their device prompt. The SDK obt
 
 ### Cross-chain supplier payments
 
-Choose **Compare Arc and Base suppliers** on Arc order review. This opens a separate buyer-funded escrow with its own weekly cap. Forestock compares its illustrative Arc quote with the project supplier’s signed, expiring Base Sepolia quote sheet and Circle’s current forwarding fee. Both offers model a 24-hour delivery. The passkey batch binds the selected Base offer and maximum fee to the order. For a single-shipment comparison, turn off buying in portions and choose 0.1 lb of copper. At a 0.053 USDC forwarding fee the Base offer costs 0.52 test USDC delivered, versus 0.58 on Arc. At 0.01 lb Arc wins. Suppliers and physical deliveries are simulated.
+New orders automatically compare Arc and Base Sepolia suppliers in one review. Earlier Arc-only orders appear alongside them. A watching order with a cheaper eligible Base offer has a **Review Base offer** action. A passkey batches cancellation and replacement at the original terms. Each escrow retains its own balance and weekly cap in Budget. Forestock compares its illustrative Arc quote with the project supplier’s signed, expiring Base Sepolia quote sheet and Circle’s current forwarding fee. Both offers model a 24-hour delivery. The passkey batch binds the selected Base offer and maximum fee to the order. For a single-shipment comparison, turn off buying in portions and choose 0.1 lb of copper. At a 0.053 USDC forwarding fee the Base offer costs 0.52 test USDC delivered, versus 0.58 on Arc. At 0.01 lb Arc wins. Suppliers and physical deliveries are simulated.
 
 The new-order forecast threshold is 10%. For a time-bounded rehearsal, open **Buying rules** and select **Order within two minutes for this demo** before signing. The worker may hold in the final 30 seconds under the deadline rule, subject to stock, price and available allowance. A longer cutoff lets the forecast itself trigger the order. The threshold is per order and can be edited with the buyer’s passkey while watching.
 

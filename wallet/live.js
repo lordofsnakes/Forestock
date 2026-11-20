@@ -1,3 +1,4 @@
+import { outlookTab } from "../public/outlook.js";
 import { openStep, restartOnReopen } from "../public/navigation.js";
 import {
   createPublicClient,
@@ -17,7 +18,7 @@ import { baseQuote, chooseOffer, requiredFee, verifiedBook, forwardingFee } from
 import { destinationReceipt } from "../lib/bridge-receipt.js";
 import { routeAbi } from "../lib/routed-abi.js";
 import { liveAbi } from "../lib/live-abi.js";
-import { relatedSalt, purchaseFamilies, sizedPurchases, stockUpQuote } from "../lib/purchase-sizing.js";
+import { orderId, relatedSalt, purchaseFamilies, sizedPurchases, stockUpQuote } from "../lib/purchase-sizing.js";
 import { liveDecision } from "../lib/live-decision.js";
 import { currentQuote, defaultThreshold, midpointPercent, totalCents } from "../public/decision.js";
 import {
@@ -31,7 +32,8 @@ const abi = [...liveAbi,...routeAbi];
 let routed, book, fee, feeTime = 0, baseSupplier;
 const destination = new Map();
 const burnIds = new Map();
-const routeKey = "forestock.routed." + localStorage.getItem("forestock.arcWallet");
+let original, originalFunds;
+const budgetTarget = () => $("budgetDesk").value === "original" ? original : address;
 const $ = (id) => document.getElementById(id);
 const buyer = localStorage.getItem("forestock.arcWallet");
 const client = createPublicClient({
@@ -70,15 +72,19 @@ let address,
 let liveAssets = [],
   quoteTime = 0;
 const receipts = new Map();
-const planKey = (id) => "forestock.arcPlan." + address + "." + id;
-function planReceipt(id) {
-  const hash = localStorage.getItem(planKey(id));
+const planKey = (id, target = address) => "forestock.arcPlan." + target + "." + id;
+function planReceipt(id, target) {
+  const hash = localStorage.getItem(planKey(id,target));
   return /^0x[0-9a-f]{64}$/i.test(hash || "")
     ? link(hash, "Authorization")
     : "";
 }
 const orders = new Map();
 const proposals = new Map();
+const loadOutlook = outlookTab($("signals"), () => ({
+  catalog:(catalog || []).map(({series,name,unit}) => ({series,name,unit})),
+  needs:[...new Set([...orders.values()].filter(entry=>entry.o.status===1).map(entry=>entry.asset?.name).filter(Boolean))],
+}));
 let displayedProposal;
 let depositEdited = false;
 function portionsFor(line) {
@@ -106,6 +112,7 @@ function filterOrders() {
     card.hidden = !matchesOrder(filter, series, status);
     if (!card.hidden) visible++;
   }
+  for (const group of $("orderList").querySelectorAll(".purchase-family")) group.hidden = !group.querySelector("article:not([hidden])");
   populateFilters($("arcFilters"), materials, statusLabels.slice(1).map((s,i) => [String(i + 1), s]), filter);
   $("arcFilters").hidden = materials.size === 0;
   const empty = $("noMatches");
@@ -119,14 +126,16 @@ let view = "orders",
   editingId;
 function showView(next) {
   view = next;
-  for (const name of ["orders", "budget", "activity"])
+  for (const name of ["orders", "signals", "budget", "activity"])
     $(name).hidden = name !== next;
   $("review").hidden = next !== "orders" || !draft?.lines?.length;
   $("arc").querySelector("h1").textContent = {
     orders: draft?.lines?.length ? "Review your order" : "Purchase orders",
+    signals: "Market outlook",
     budget: "Budget",
     activity: "Activity",
   }[next];
+  if (next === "signals") loadOutlook();
   document
     .querySelectorAll("[data-view]")
     .forEach((b) =>
@@ -150,21 +159,21 @@ document.querySelector("nav").onclick = (e) => {
       { duration: 240 },
     );
 };
-const opKey = () => "forestock.arcPending." + address + "." + buyer;
-const read = (functionName, args = []) =>
-  client.readContract({ address, abi, functionName, args });
-const call = (functionName, args, value = 0n) => ({
-  to: address,
+const opKey = (target = address) => "forestock.arcPending." + target + "." + buyer;
+const read = (functionName, args = [], target = address) =>
+  client.readContract({ address:target, abi, functionName, args });
+const call = (functionName, args, value = 0n, target = address) => ({
+  to: target,
   value,
   data: encodeFunctionData({ abi, functionName, args }),
 });
 
-async function blockReceipt(id, block, eventName, isBurn = false) {
+async function blockReceipt(id, block, eventName, isBurn, target, cardKey) {
   if (!block) return "";
-  const k = id + eventName;
+  const k = cardKey + eventName;
   if (!receipts.has(k)) {
     const logs = await client.getContractEvents({
-      address,
+      address:target,
       abi,
       eventName,
       args: { id },
@@ -255,6 +264,7 @@ function updateApproval() {
         "This deposit covers the remaining " + amount(remaining) + " test USDC.") +
       " Your wallet also pays the Arc network fee.";
   }
+  if (originalFunds?.free > 0n && remaining > 0n) fundingText += " Earlier Arc escrow has "+amount(originalFunds.free)+" test USDC. You can withdraw it in Budget.";
   $("depositHelp").textContent = fundingText;
   $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%" + (f.elements.recording.checked ? " · Dated forecast allowed" : "") + (f.elements.shortWindow.checked ? " · 2 min cutoff" : "");
   if (needsFunds) {
@@ -325,16 +335,20 @@ function showDraft() {
       cost += BigInt(cents) * 10n ** 16n;
       const networks = [...new Set(portions.map(p=>p.offer.network))].join(" + ");
       const fees = portions.reduce((sum,p)=>sum+(p.offer.feeMicros || 0),0);
-      const alternative = routed && baseQuote(line,book,fee,Math.floor(Date.now()/1000));
-      const comparison = alternative ? '<details data-plan="'+escape(line.salt)+'-compare"><summary>Compare one shipment</summary><p>Arc ' + usd(totalCents(line.quantity,line.price)) +
-        ' · Base Sepolia ' + usd(alternative.cents) + ' including forwarding' +
-        (alternative.price>line.cap ? ' (above your price cap)' : '') + '</p></details>' : '';
+      const comparison = routed ? '<details data-plan="'+escape(line.salt)+'-compare"><summary>Compare supplier offers</summary>'+
+        portions.map(part => {
+          const alternative = baseQuote({...line,quantity:part.quantity},book,fee,Math.floor(Date.now()/1000));
+          const base = alternative ? usd(alternative.cents)+' including forwarding'+(alternative.price>line.cap?' (above cap)':'') : 'quote unavailable';
+          return '<p>'+escape(part.quantity+" "+line.unit)+' · Arc '+usd(totalCents(part.quantity,line.price))+' · Base Sepolia '+base+'</p>';
+        }).join("")+'</details>' : '';
       const sizing = portions.length>1 ? '<details class="portion-plan" data-plan="'+escape(line.salt)+'-sizing"><summary>Up to '+escape(line.quantity+" "+line.unit)+' in '+portions.length+
         ' purchases</summary>'+portions.map(p=>'<p>'+escape(p.quantity+" "+line.unit)+' at '+p.threshold+'% or higher · '+usd(p.offer.cents)+
         (routed?' · '+p.offer.network:'')+'</p>').join("")+'<p>Near the cutoff, any remaining portions can be bought within your price and spending limits.</p></details>' : '<p class="hint">One purchase at this quantity and price cap.</p>';
+      const idea = line.idea ? '<details data-plan="'+escape(line.salt)+'-idea"><summary>Why Sparrow suggested this</summary><p>'+
+        escape(line.idea.title)+' · '+escape(line.idea.outcome)+'</p><p>'+escape(line.idea.reason)+'</p><small>The commodity forecast and your buying rules govern this order.</small></details>' : '';
       return '<li><div class="review-item"><strong>' + escape(line.name) + '</strong><b>' + usd(cents) +
         '</b></div><div class="review-item-meta"><span>' + escape(line.quantity + " " + line.unit) +
-        '</span>' + (routed ? '<span>' + networks + (fees ? ' · up to ' + (fees/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + sizing + comparison + '</li>';
+        '</span>' + (routed ? '<span>' + networks + (fees ? ' · up to ' + (fees/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + sizing + comparison + idea + '</li>';
     })
     .join("");
   for (const plan of $("lines").querySelectorAll("details")) plan.open = openPlans.has(plan.dataset.plan);
@@ -349,12 +363,14 @@ function showDraft() {
   if (!depositEdited) $("approve").elements.deposit.value = formatEther(cost > funds.free ? cost - funds.free : 0n);
   updateApproval();
 }
-async function orderCard(id, o, family, records) {
+async function orderCard(rawId, o, family, records, target, account, isExtra) {
+  const legacy = target !== address;
+  const id = legacy ? "old-" + rawId : rawId;
   const series = hexToString(o.series, { size: 32 });
   const live = liveAssets.find((a) => a.series === series);
   const archived = catalog.find((a) => a.series === series);
   const reference = archived || live;
-  const [baseUnit, feeCap] = routed && (o.status === 1 || o.status === 2 || o.status === 6) ? await read("baseOffer",[id]) : [0];
+  const [baseUnit, feeCap] = routed && !legacy && (o.status === 1 || o.status === 2 || o.status === 6) ? await read("baseOffer",[rawId]) : [0];
   const asset = baseUnit && reference ? {...reference,price:baseUnit} : reference;
   const mint = o.status === 6 ? await bridgeStatus(id,o) : undefined;
   const mintLink = mint ? '<a href="https://sepolia.basescan.org/tx/'+mint+'" target="_blank" rel="noreferrer">Base supplier receipt ↗</a>' : "";
@@ -371,7 +387,7 @@ async function orderCard(id, o, family, records) {
     o.status === 1
       ? liveDecision(
           o,
-          funds,
+          account,
           asset,
           live?.market,
           archived?.market,
@@ -391,7 +407,7 @@ async function orderCard(id, o, family, records) {
     asset,
     live: live?.market,
     recording: archived?.market,
-    assessment, mintLink, status,
+    assessment, mintLink, status, rawId, target, account,
   });
   let body = "";
   if (assessment) {
@@ -415,14 +431,24 @@ async function orderCard(id, o, family, records) {
       '">Cancel need</button>';
   }
   let sizing = "";
-  if (family?.extra === id) sizing = "Buyer-approved extra stock";
+  if (isExtra) sizing = "Buyer-approved extra stock";
   else if (family?.portions.length > 1) {
     const total = family.portions.reduce((sum, key) => sum + records.get(key).quantityMilli, 0) / 1000;
-    sizing = "Portion " + (family.portions.indexOf(id) + 1) + " of " + family.portions.length +
+    sizing = "Portion " + (family.portions.indexOf(rawId) + 1) + " of " + family.portions.length +
       " · " + total + " " + (asset?.unit || "units") + " approved in total";
   }
   orders.get(id).sizing = sizing;
   if (sizing) body = '<p class="hint">' + escape(sizing) + '</p>' + body;
+  if (o.status === 1 && reference && routed) {
+    const line = {...reference, quantity:o.quantityMilli / 1000, cap:o.capCents, orderBy:Number(o.orderBy)};
+    const alternative = baseQuote(line,book,fee,Math.floor(Date.now()/1000));
+    const best = offerFor(line);
+    orders.get(id).switchOffer = !baseUnit && best.feeMicros ? best : null;
+    body += '<details data-owner="'+id+'" data-disclosure="offers"><summary>Supplier offers · '+(baseUnit ? 'Base selected' : 'Arc selected')+'</summary><p>Arc '+usd(totalCents(line.quantity,line.price))+
+      ' · Base Sepolia '+(alternative ? usd(alternative.cents)+' including forwarding'+(alternative.price>line.cap?' (above cap)':'') : 'quote unavailable')+'</p>'+
+      (orders.get(id).switchOffer ? '<button data-route="'+id+'">Review Base offer</button>' : '')+'</details>';
+  }
+  if (legacy) body += '<p class="hint">Earlier Arc escrow</p>';
   const proposal=proposals.get(id);
   if (proposal) body += '<div class="stock-suggestion"><strong>Sparrow suggests stocking up</strong><p>'+
     proposal.probability+'% chance of '+escape(asset.name)+' reaching $'+proposal.strike+' or higher. Add '+escape(proposal.line.quantity+" "+asset.unit)+
@@ -435,9 +461,9 @@ async function orderCard(id, o, family, records) {
     '">Ask about this order</button></div>';
   const links = await Promise.all([
     mintLink,
-    planReceipt(id),
-    blockReceipt(id, o.holdBlock, "Held"),
-    blockReceipt(id, o.settlementBlock, "Settled", o.status === 6),
+    planReceipt(rawId,target),
+    blockReceipt(rawId, o.holdBlock, "Held",false,target,id),
+    blockReceipt(rawId, o.settlementBlock, "Settled",o.status===6,target,id),
   ]);
   return (
     '<article data-order="' + id + '" data-series="' + escape(series) + '" data-status="' + (mint ? 3 : o.status) + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
@@ -455,20 +481,10 @@ async function orderCard(id, o, family, records) {
     "</article>"
   );
 }
-function refresh() {
-  ongoingRefresh ??= readWorkspace().finally(() => { ongoingRefresh = undefined; });
-  return ongoingRefresh;
-}
-async function readWorkspace() {
-  const head = await client.getBlock({ blockTag: "latest" });
-  const [wallet, free, limit, spent] = await Promise.all([
-    client.getBalance({ address: buyer }),
-    read("free", [buyer]),
-    read("weeklyLimit", [buyer]),
-    read("committed", [buyer, (head.timestamp + 259200n) / 604800n]),
-  ]);
-  funds = { wallet, free, limit, spent };
-  if ($("notice").textContent.trim() === "Reading your escrow on Arc…") notice("");
+function renderBudget() {
+  const account = budgetTarget() === original ? originalFunds : funds;
+  if (!account) return;
+  const {wallet, free, limit, spent} = account;
   $("balances").textContent =
     "Wallet " +
     amount(wallet) +
@@ -484,6 +500,27 @@ async function readWorkspace() {
   const walletCents = wallet / (10n ** 16n);
   syncAmountSlider($("capRange"), capField, Math.max(10, 2 * Number(formatEther(limit)), Number(capField.value), Number(formatEther(wallet + free))));
   syncAmountSlider($("depositRange"), depositField, Number(walletCents > 0n ? walletCents - 1n : 0n) / 100);
+}
+$("budgetDesk").onchange = () => {
+  budgetEdited = false;
+  $("fund").elements.deposit.value = "0";
+  renderBudget();
+};
+function refresh() {
+  ongoingRefresh ??= readWorkspace().finally(() => { ongoingRefresh = undefined; });
+  return ongoingRefresh;
+}
+async function readWorkspace() {
+  const head = await client.getBlock({ blockTag: "latest" });
+  const wallet = await client.getBalance({ address: buyer });
+  const period = (head.timestamp + 259200n) / 604800n;
+  async function balanceFor(target) {
+    const [free, limit, spent] = await Promise.all([read("free",[buyer],target),read("weeklyLimit",[buyer],target),read("committed",[buyer,period],target)]);
+    return {wallet,free,limit,spent};
+  }
+  [funds,originalFunds] = await Promise.all([balanceFor(address), original && balanceFor(original)]);
+  if ($("notice").textContent.trim() === "Reading your escrow on Arc…") notice("");
+  renderBudget();
   if (routed && !draft?.lines?.length && Date.now() - feeTime > 60000) await updateFee();
   showDraft();
   if (Date.now() - quoteTime > 60000) {
@@ -497,30 +534,64 @@ async function readWorkspace() {
       liveAssets = [];
     }
   }
-  const ids = [];
-  for (;;) {
-    const batch = await read("list", [buyer, BigInt(ids.length), 50n]);
-    ids.push(...batch);
-    if (batch.length < 50) break;
+  async function loadOrders(target) {
+    const ids = [];
+    for (;;) {
+      const batch = await read("list", [buyer, BigInt(ids.length), 50n],target);
+      ids.push(...batch);
+      if (batch.length < 50) break;
+    }
+    return new Map(await Promise.all(ids.map(async id=>[id,await read("order",[id],target)])));
   }
-  const records=new Map(await Promise.all(ids.map(async id=>[id,await read("order",[id])])));
-  const families=purchaseFamilies(ids,buyer);
+  const [current, older] = await Promise.all([loadOrders(address), original ? loadOrders(original) : new Map()]);
+  $("budgetDeskLabel").hidden = !original || !(older.size || originalFunds.free || originalFunds.limit);
   const now=Date.now();
-  const reservedCents=[...records.values()].filter(o=>o.status===1 && Number(o.orderBy)*1000>=now)
+  const reservedCents=[...current.values()].filter(o=>o.status===1 && Number(o.orderBy)*1000>=now)
     .reduce((sum,o)=>sum+totalCents(o.quantityMilli/1000,o.capCents),0);
   const weeklyRoom=Number((funds.limit-funds.spent)/10n**16n)-reservedCents;
   proposals.clear();
-  for (const [id,o] of records) {
-    const family=families.get(id);
-    if (family && (family.root!==id || family.extra)) continue;
-    const series=hexToString(o.series,{size:32});
-    const live=liveAssets.find(a=>a.series===series);
-    const familyOrders=(family?.portions || [id]).map(key=>records.get(key));
-    const proposal=stockUpQuote(familyOrders,catalog.find(a=>a.series===series)||live,live?.market,now,offerFor,weeklyRoom);
-    if (proposal) proposals.set(id,{...proposal,root:id,escrowRoom:Number(funds.free/10n**16n)-reservedCents});
+  const ids = [];
+  const rows = [];
+  const groups = new Map();
+  const linkedExtras = new Set();
+  for (const root of [...older.keys(),...current.keys()]) {
+    const extra = orderId(buyer,relatedSalt(root,"extra"));
+    if (current.has(extra) || older.has(extra)) linkedExtras.add(extra);
   }
-  const cards = await Promise.all(ids.reverse().map(id=>orderCard(id,records.get(id),families.get(id),records)));
-  const markup = cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
+  for (const [records,target,account] of [[current,address,funds],[older,original,originalFunds]]) {
+    const families=purchaseFamilies([...records.keys()],buyer);
+    for (const [rawId,o] of [...records].reverse()) {
+      const id=target===address ? rawId : "old-"+rawId;
+      const family=families.get(rawId);
+      if (!linkedExtras.has(rawId) && (!family || (family.root===rawId && !family.extra)) && !current.has(orderId(buyer,relatedSalt(rawId,"extra")))) {
+        const series=hexToString(o.series,{size:32});
+        const live=liveAssets.find(a=>a.series===series);
+        const familyOrders=(family?.portions || [rawId]).map(key=>records.get(key));
+        const proposal=stockUpQuote(familyOrders,catalog.find(a=>a.series===series)||live,live?.market,now,offerFor,weeklyRoom);
+        if (proposal) proposals.set(id,{...proposal,root:id,saltRoot:rawId,escrowRoom:Number(funds.free/10n**16n)-reservedCents});
+      }
+      if (family?.portions.length > 1 && family.portions.includes(rawId)) {
+        const groupKey = target + family.root;
+        const total = family.portions.reduce((sum,key)=>sum+records.get(key).quantityMilli,0)/1000;
+        const asset = catalog.find(a=>a.series===hexToString(o.series,{size:32}));
+        groups.set(id,{key:groupKey,label:(asset?.name || "Material")+" · "+total+" "+(asset?.unit || "units")+" total"});
+      }
+      ids.push(id);
+      rows.push(orderCard(rawId,o,family,records,target,account,linkedExtras.has(rawId)));
+    }
+  }
+  const cards = await Promise.all(rows);
+  const groupsMarkup = new Map();
+  cards.forEach((card,i) => {
+    const group = groups.get(ids[i]);
+    const key = group?.key || ids[i];
+    if (!groupsMarkup.has(key)) groupsMarkup.set(key,{group, cards:[]});
+    if (group) groupsMarkup.get(key).cards.unshift(card);
+    else groupsMarkup.get(key).cards.push(card);
+  });
+  const blocks = [...groupsMarkup.values()].map(({group,cards}) => group
+    ? '<section class="purchase-family"><h3>'+escape(group.label)+'</h3>'+cards.join("")+'</section>' : cards.join(""));
+  const markup = cards.length ? blocks.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
   if (markup !== lastOrderMarkup) {
     const list = $("orderList");
     const open = new Set([...list.querySelectorAll("details[open]")].map(d => d.dataset.owner + d.dataset.disclosure));
@@ -537,11 +608,11 @@ async function readWorkspace() {
   filterOrders();
   $("events").innerHTML =
     ids
-      .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
+      .filter((id) => orders.get(id).o.status === 3 || planReceipt(orders.get(id).rawId,orders.get(id).target) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
       .map(id => {
         const { o, asset, mintLink, status } = orders.get(id);
         const series = hexToString(o.series, {size: 32});
-        const links = [mintLink, planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
+        const links = [mintLink, planReceipt(orders.get(id).rawId,orders.get(id).target), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
         return '<div class="receipt-line">' + (o.status === 3 || mintLink ? purchaseMark(series) : "") +
           '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + escape(o.status === 6 ? status : statusLabels[o.status]) +
           (links ? "<br>" + links : "") + "</div></div>";
@@ -549,11 +620,11 @@ async function readWorkspace() {
       .join("") ||
     "<p>Receipts appear here when the agent places an order on Arc.</p>";
 }
-async function confirmed(receipt, type) {
+async function confirmed(receipt, type, target) {
   if (
     receipt.success &&
     receipt.receipt.status === "success" &&
-    (type === "plan" || type === "stock")
+    (type === "plan" || type === "stock" || type === "route")
   ) {
     const events = parseEventLogs({
       abi,
@@ -562,17 +633,17 @@ async function confirmed(receipt, type) {
     });
     for (const e of events) {
       if (
-        e.address.toLowerCase() === address.toLowerCase() &&
+        e.address.toLowerCase() === target.toLowerCase() &&
         e.args.buyer.toLowerCase() === buyer.toLowerCase()
       )
         localStorage.setItem(
-          planKey(e.args.id),
+          planKey(e.args.id,target),
           receipt.receipt.transactionHash,
         );
     }
     if (type === "plan") { localStorage.removeItem(draftKey); draft = null; }
   }
-  localStorage.removeItem(opKey());
+  localStorage.removeItem(opKey(target));
   if (!receipt.success || receipt.receipt.status !== "success")
     throw Error(
       "Arc reported a failed operation. Check your balance and order terms.",
@@ -590,29 +661,29 @@ async function confirmed(receipt, type) {
   }
   await refresh();
 }
-async function transact(type, calls) {
+async function transact(type, calls, target = address) {
   if (!address) return notice("Waiting for your Arc wallet connection.");
   if (!key) return notice("Wallet signing is unavailable. The deployment needs its Circle web client key.");
   if (navigator.locks) {
-    return navigator.locks.request(opKey(), { ifAvailable: true }, (lock) =>
+    return navigator.locks.request(opKey(target), { ifAvailable: true }, (lock) =>
       lock
-        ? submit(type, calls)
+        ? submit(type, calls, target)
         : notice("A wallet transaction is already open in another tab."),
     );
   }
-  return submit(type, calls);
+  return submit(type, calls, target);
 }
-async function submit(type, calls) {
+async function submit(type, calls, target) {
   if (working) return;
   working = true;
   updateApproval();
   try {
-    const pending = JSON.parse(localStorage.getItem(opKey()));
+    const pending = JSON.parse(localStorage.getItem(opKey(target)));
     if (pending) {
       notice("Checking the previously submitted operation…");
       await confirmed(
         await waitEscrowOperation(key, pending.hash),
-        pending.type,
+        pending.type,target,
       );
       return;
     }
@@ -639,13 +710,13 @@ async function submit(type, calls) {
     if (value === funds.wallet) throw Error("Leave test USDC in your wallet for the Arc network fee.");
     notice("Confirm this Arc Testnet transaction with your passkey.");
     const receipt = await sendEscrowCalls(key, buyer, calls, (hash) => {
-      localStorage.setItem(opKey(), JSON.stringify({ type, hash }));
+      localStorage.setItem(opKey(target), JSON.stringify({ type, hash }));
       notice("Submitted to Arc. Waiting for confirmation…");
     });
-    await confirmed(receipt, type);
+    await confirmed(receipt, type,target);
   } catch (e) {
     const feeError = /prefund|insufficient funds|AA21/i.test((e.shortMessage || "") + " " + (e.message || ""));
-    if (localStorage.getItem(opKey())) notice("Submitted. Reopen Arc orders to check the pending operation.");
+    if (localStorage.getItem(opKey(target))) notice("Submitted. Reopen Arc orders to check the pending operation.");
     else if (feeError) {
       if (type === "plan" && funds) gasShortfall = { balance: funds.wallet, deposit: calls[0].value };
       notice(type === "plan" ? "Arc needs more test USDC for this authorization." : "Your wallet needs test USDC for the network fee. Open Budget for the funding address.");
@@ -655,11 +726,11 @@ async function submit(type, calls) {
     updateApproval();
   }
 }
-function terms(form) {
+function terms(form,target = address) {
   return call(
     "configure",
     [parseEther(form.elements.limit.value)],
-    parseEther(form.elements.deposit.value),
+    parseEther(form.elements.deposit.value),target,
   );
 }
 $("approve").onsubmit = async (e) => {
@@ -693,19 +764,17 @@ $("discard").onclick = () => {
 };
 $("fund").onsubmit = (e) => {
   e.preventDefault();
-  transact("budget", [terms(e.target)]);
+  transact("budget", [terms(e.target,budgetTarget())],budgetTarget());
 };
 $("withdraw").onclick = () => {
-  if (
-    funds?.free > 0n &&
-    confirm(
-      "Return " + amount(funds.free) + " test USDC from escrow to your wallet?",
-    )
-  )
-    transact("withdraw", [call("withdraw", [funds.free])]);
+  const target = budgetTarget();
+  const free = (target === original ? originalFunds : funds)?.free;
+  if (free > 0n && confirm("Return " + amount(free) + " test USDC from this escrow to your wallet?"))
+    transact("withdraw", [call("withdraw",[free],0n,target)],target);
 };
 $("orderList").onclick = (e) => {
   const b = e.target.closest("button");
+  if (b?.dataset.route) return openRoute(b.dataset.route);
   if (b?.dataset.stock) {
     const proposal=proposals.get(b.dataset.stock);
     if (proposal) openStockProposal(proposal);
@@ -752,14 +821,56 @@ $("orderList").onclick = (e) => {
         draft: {
           series,
           quantity: o.quantityMilli / 1000,
-          allowance: Number(formatEther(funds.limit)),
+          allowance: Number(formatEther(orders.get(b.dataset.chat).account.limit)),
         },
       }),
     );
     openStep("/?plan=arc&talk=1");
   }
   if (b?.dataset.cancel && confirm("Cancel this authorized need on Arc?"))
-    transact("cancel", [call("cancel", [b.dataset.cancel])]);
+    { const {rawId,target}=orders.get(b.dataset.cancel); transact("cancel",[call("cancel",[rawId],0n,target)],target); }
+};
+let routeReview;
+function openRoute(id) {
+  const entry = orders.get(id);
+  if (!entry?.switchOffer || entry.o.status !== 1) return;
+  const {o,asset,switchOffer:offer} = entry;
+  routeReview = {id,price:offer.price,cents:offer.cents,fee:offer.feeMicros,threshold:o.threshold,allowRecording:o.allowRecording};
+  $("routeTerms").textContent = o.quantityMilli/1000+" "+asset.unit+" of "+asset.name+" · Arc "+usd(totalCents(o.quantityMilli/1000,asset.price))+
+    " · Base "+usd(offer.cents)+" including forwarding. One passkey approval cancels the current order and signs the Base offer with the same quantity, price cap, forecast rule and cutoff.";
+  const cost = BigInt(offer.cents)*10n**16n;
+  const covered = funds.free >= cost && funds.limit-funds.spent >= cost;
+  $("routeFunding").textContent = covered ? "Your Arc and Base escrow covers this offer." :
+    "This offer uses the Arc and Base escrow. Review its balance and weekly cap in Budget first.";
+  $("approveRoute").textContent = covered ? "Approve with passkey" : "Open budget";
+  if (!$("routeDialog").open) $("routeDialog").showModal();
+}
+$("closeRoute").onclick = () => $("routeDialog").close();
+$("approveRoute").onclick = async () => {
+  const previous = routeReview;
+  const button = $("approveRoute");
+  button.disabled = true;
+  try {
+    if (button.textContent === "Open budget") {
+      $("routeDialog").close();
+      $("budgetDesk").value="current"; $("budgetDesk").onchange(); showView("budget"); return;
+    }
+    await updateFee();
+    await refresh();
+    const entry = orders.get(previous.id);
+    const offer = entry?.switchOffer, o = entry?.o;
+    if (!offer || o.status !== 1) { $("routeDialog").close(); return notice("The Base offer is no longer available for this order."); }
+    openRoute(previous.id);
+    if (Object.keys(previous).some(key => previous[key] !== routeReview[key]) || button.textContent === "Open budget") {
+      $("routeTerms").prepend("Terms changed. "); return;
+    }
+    const salt = relatedSalt(entry.rawId,entry.target === original ? "route-legacy" : "route");
+    const portion = {salt,quantityMilli:o.quantityMilli,threshold:o.threshold,offer};
+    const line = {...entry.asset,cap:o.capCents};
+    $("routeDialog").close();
+    await transact("route",[call("cancel",[entry.rawId],0n,entry.target),...purchaseCalls(line,portion,o.orderBy,o.allowRecording)]);
+  } catch { notice("Couldn’t verify the latest offer. Try again."); }
+  finally { button.disabled=false; }
 };
 function openStockProposal(proposal) {
   displayedProposal=proposal;
@@ -778,7 +889,7 @@ $("dismissStock").onclick=()=>$("stockDialog").close();
 $("approveStock").onclick=async () => {
   const previous=displayedProposal;
   if (!previous || working) return;
-  if (previous.escrowRoom<previous.offer.cents) { $("stockDialog").close(); showView("budget"); return; }
+  if (previous.escrowRoom<previous.offer.cents) { $("stockDialog").close(); $("budgetDesk").value="current"; $("budgetDesk").onchange(); showView("budget"); return; }
   const button=$("approveStock");
   button.disabled=true;
   try {
@@ -794,7 +905,7 @@ $("approveStock").onclick=async () => {
       openStockProposal(proposal); $("stockReason").prepend("The terms changed. "); return;
     }
     $("stockDialog").close();
-    const salt=relatedSalt(proposal.root,"extra");
+    const salt=relatedSalt(proposal.saltRoot,"extra");
     await transact("stock",purchaseCalls(proposal.line,{salt,quantityMilli:Math.round(proposal.line.quantity*1000),
       threshold:proposal.threshold,offer:proposal.offer},proposal.line.orderBy,false));
   } catch { notice("Couldn’t verify the stock-up terms. Try again."); }
@@ -809,7 +920,7 @@ function preview() {
   }
   const d = liveDecision(
     { ...o, threshold: input.valueAsNumber },
-    funds,
+    orders.get(editingId).account,
     asset,
     live,
     recording,
@@ -823,9 +934,8 @@ $("closeThreshold").onclick = () => $("editThreshold").close();
 $("thresholdForm").onsubmit = (e) => {
   e.preventDefault();
   $("editThreshold").close();
-  transact("threshold", [
-    call("changeThreshold", [editingId, e.target.elements.value.valueAsNumber]),
-  ]);
+  const {rawId,target} = orders.get(editingId);
+  transact("threshold",[call("changeThreshold",[rawId,e.target.elements.value.valueAsNumber],0n,target)],target);
 };
 async function start() {
   if (!isAddress(buyer || "")) {
@@ -854,26 +964,20 @@ async function start() {
     (await client.getChainId()) !== network.chainId
   )
     throw Error("Arc escrow configuration is unavailable.");
-  const desk = new URLSearchParams(location.search).get("desk");
-  if (desk === "routed" || desk === "original") sessionStorage.setItem(routeKey,desk);
-  routed = network.routed && sessionStorage.getItem(routeKey)==="routed";
+  routed = Boolean(network.routed);
   address = routed ? network.routed.escrow : network.escrow;
-  if (network.routed) {
-    $("deskSwitch").hidden = false;
-    $("deskLink").href = routed ? "/arc.html?desk=original" : "/arc.html?desk=routed";
-    $("deskLink").textContent = routed ? "Return to Arc-only orders" : "Compare Arc and Base suppliers";
-    $("deskNote").textContent = routed ? "Cross-chain orders use a separate escrow and weekly cap." : "";
-  }
+  original = routed ? network.escrow : null;
   if (routed) {
-    baseSupplier = await read("baseSupplier");
     try {
+      baseSupplier = await read("baseSupplier");
       const data = await (await fetch("/base-offers.json")).json();
       book = await verifiedBook(data,baseSupplier,address);
     } catch { book = null; }
     await updateFee();
   }
   key = walletConfig.clientKey;
-  if (localStorage.getItem(opKey())) await transact("resume", []);
+  for (const target of [address,original].filter(Boolean))
+    if (localStorage.getItem(opKey(target))) await transact("resume", [],target);
   await refresh();
   const refreshWhenVisible = () => {
     if (!document.hidden && !working)

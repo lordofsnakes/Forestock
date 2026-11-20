@@ -1,3 +1,4 @@
+import { outlookTab } from "./outlook.js";
 import { escapeText as esc, filterControls, populateFilters, matchesOrder, purchaseMark, orderForecast, syncAmountSlider } from "./workspace-controls.js";
 import { openStep } from "./navigation.js";
 import { flyToScreen, flyToArcReview, hop } from "./onboarding-motion.js";
@@ -39,6 +40,10 @@ function initial() {
   };
 }
 const livePlanning = new URLSearchParams(location.search).get("practice") !== "1";
+const suggestedSeries = livePlanning && new URLSearchParams(location.search).get("material");
+const ideaKey = "forestock.outlookIdea."+localStorage.getItem("forestock.arcWallet");
+const storedIdea = suggestedSeries ? JSON.parse(sessionStorage.getItem(ideaKey) || "null") : null;
+const outlookIdea = storedIdea?.series === suggestedSeries ? storedIdea : null;
 const saved = livePlanning ? null : JSON.parse(localStorage.getItem(key) || "null");
 let s = saved || initial(),
   tab = "Orders";
@@ -63,10 +68,14 @@ function finishSetup(lines, allowance) {
       const quote = baseline.find(a => a.series === asset.series) || asset;
       const due = dueDate ? new Date(dueDate + "T23:59:00").getTime() : now() + 2 * day;
       const salt = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2,"0")).join("");
-      return {...compact(quote), quantity, cap: Math.ceil(quote.price * 1.035),
+      return {...compact(quote), quantity, ...(outlookIdea?.series===quote.series && {idea:outlookIdea}), cap: Math.ceil(quote.price * 1.035),
         orderBy: Math.floor((due - day) / 1000), salt: "0x" + salt};
     });
-    localStorage.setItem("forestock.arcDraft." + buyer, JSON.stringify({lines:drafts,allowance}));
+    const draftKey = "forestock.arcDraft." + buyer;
+    const previous = suggestedSeries && JSON.parse(localStorage.getItem(draftKey) || "null");
+    const linesToReview = previous?.lines?.length ? [...previous.lines,...drafts] : drafts;
+    localStorage.setItem(draftKey, JSON.stringify({lines:linesToReview,allowance}));
+    if (outlookIdea) sessionStorage.removeItem(ideaKey);
     flyToArcReview(welcome);
     return;
   }
@@ -161,7 +170,7 @@ form.elements.asset.addEventListener("change", () => {
   form.cap.value = ((selected(form).price / 100) * 1.03).toFixed(2);
 });
 const chat = startChat({
-  choices, material: current(), quantity: order().qty, allowance: livePlanning ? 1 : s.limit / 100, live: livePlanning,
+  choices, initialSeries: suggestedSeries, idea:outlookIdea, material: current(), quantity: order().qty, allowance: livePlanning ? 1 : s.limit / 100, live: livePlanning,
   status: order().status, returning: Boolean(saved), availableFunds: livePlanning ? () => Infinity : available, finish: finishSetup,
 });
 fillPickers();
@@ -384,6 +393,17 @@ function render(check, savedThreshold = false) {
       row("Needed by",dt(o.due)) +
       '</details></section>';
     fillOverview();
+  } else if (tab === "Outlook") {
+    el.innerHTML = '<h1>Market outlook</h1><section id="signals" class="card"></section>';
+    outlookTab(el.querySelector("#signals"), () => ({
+      catalog:choices().map(({series,name,unit})=>({series,name,unit})),
+      needs:s.orders.filter(o=>o.status==="Watching").map(o=>(o.asset||copper).name),
+    }), series => {
+      switchTab("Orders");
+      el.querySelector('[data-action="add"]').click();
+      form.elements.asset.value = series;
+      form.elements.asset.dispatchEvent(new Event("change"));
+    })();
   } else if (tab === "Budget") {
     el.innerHTML =
       '<h1>Purchasing budget</h1><section class="hero"><div><small>AVAILABLE TO ORDER</small><div class="big">' +

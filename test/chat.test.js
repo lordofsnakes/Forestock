@@ -148,3 +148,18 @@ test("the sparrow accepts thousandth-unit requests and rejects finer order quant
   assert.equal(response.data.draft.quantity, .001);
   assert.equal((await request({ ...body, draft: { ...draft, quantity: .0009 } })).code, 400);
 });
+
+test("Outlook gives a conditional explanation and only links a catalog material", async t => {
+  const original = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(()=>{if (original === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY=original;});
+  let series = "COPPER";
+  t.mock.method(globalThis,"fetch",async (_url,options)=>{
+    assert.match(JSON.parse(options.body).messages[0].content,/procurement analyst/);
+    return Response.json({choices:[{message:{content:JSON.stringify({reply:"Check the lead time for wiring.",series})}}]});
+  });
+  const query = {...body,mode:"outlook",marketContext:"Event outcome from Gemini."};
+  assert.deepEqual((await request(query)).data,{reply:"Check the lead time for wiring.",series:"COPPER"});
+  series = "unknown";
+  assert.equal((await request(query)).data.series,null);
+});

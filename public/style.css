@@ -636,3 +636,20 @@ input[type="range"] { min-height: 36px; margin: 0 0 10px; padding: 0; border: no
 
 .market-strike > span:last-child { text-align: right; }
 .market-strike small { display: block; font-size: .75rem; color: #69574a; }
+
+#orderList > article, .purchase-family, #signals .outlook-event { background: #fffdf8; border: 1px solid #d6c5ac; border-top: 3px solid #a76039; padding: clamp(14px, 4vw, 22px); margin: 18px 0; }
+#orderList > article > h3, .outlook-event h3 { margin: 0 0 6px; }
+#orderList > article .market-updates { margin-bottom: 0; }
+.signal-tabs { display: flex; gap: 6px; }
+.signal-tabs [aria-pressed="true"] { background: #754024; color: #fff; }
+.outlook-event { border-top-color: #957b5e; }
+.outlook-event .signal-quote { font-size: 1.1rem; font-weight: 600; }
+.outlook-event small { display: block; color: #69574a; margin-bottom: 12px; }
+.outlook-event [data-result] { margin-top: 10px; }
+#signals { max-width: 42rem; }
+nav[aria-label="Workspace"] button { min-width: 0; padding-inline: 4px; }
+
+.purchase-family > h3 { margin: 0 0 12px; }
+.purchase-family > article:last-child { padding-bottom: 0; }
+
+.need-entry + .need-entry { margin-top: 6px; border-top: 1px solid #dfd0bb; }

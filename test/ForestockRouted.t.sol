@@ -44,6 +44,30 @@ contract RoutedTest is IArcUSDC, ITokenMessengerV2 {
         vm.expectRevert(); vault.settle(id,true);
         require(vault.free(address(this))==0.47 ether);
     }
+    // Run the same three calls that the buyer signs in one smart-account batch.
+    function switchSupplier(ForestockLive original, bytes32 previous, uint32 unitCents) external {
+        ForestockLive.Order memory terms = original.order(previous);
+        original.cancel(previous);
+        vault.plan("replacement",terms.series,terms.quantityMilli,terms.capCents,terms.orderBy,terms.threshold,terms.allowRecording);
+        vault.selectBase("replacement",unitCents,60000);
+    }
+    function testSwitchKeepsOriginalWhenTheBaseOfferFails() public {
+        ForestockLive original = new ForestockLive(address(this),address(this));
+        original.plan("earlier","COPPER",100,600,uint64(block.timestamp+1 days),38,true);
+        bytes32 previous = keccak256(abi.encode(address(this),bytes32("earlier")));
+        bytes32 replacement = keccak256(abi.encode(address(this),bytes32("replacement")));
+
+        vm.expectRevert(); this.switchSupplier(original,previous,601);
+        require(original.order(previous).status==ForestockLive.Status.Watching);
+        require(vault.order(replacement).status==ForestockLive.Status.Missing);
+
+        this.switchSupplier(original,previous,530);
+        require(original.order(previous).status==ForestockLive.Status.Cancelled);
+        ForestockLive.Order memory order = vault.order(replacement);
+        require(order.status==ForestockLive.Status.Watching && order.quantityMilli==100 && order.threshold==38 && order.allowRecording);
+        require(order.orderBy==original.order(previous).orderBy && order.capCents==600);
+        vm.expectRevert(); this.switchSupplier(original,previous,530);
+    }
     function testCannotRedirectOrReplaceBaseOffer() public {
         vm.expectRevert(); vault.selectBase("one",540,1000);
         vm.prank(address(17)); vm.expectRevert(); vault.selectBase("one",530,60000);

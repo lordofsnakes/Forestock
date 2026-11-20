@@ -2,11 +2,12 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import chat from "./api/chat.js";
+import signals from "./api/signals.js";
 import market from "./api/market.js";
 http
   .createServer(async (req, res) => {
     const route = new URL(req.url, "http://localhost").pathname;
-    if (route === "/api/market" || route === "/api/chat") {
+    if (["/api/market","/api/chat","/api/signals"].includes(route)) {
       res.status = (n) => {
         res.statusCode = n;
         return res;
@@ -25,7 +26,7 @@ http
         catch { return res.status(400).json({ error: "Invalid JSON." }); }
         return chat(req, res);
       }
-      return market(req, res);
+      return route === "/api/signals" ? signals(req,res) : market(req, res);
     }
     try {
       const file = path.resolve(

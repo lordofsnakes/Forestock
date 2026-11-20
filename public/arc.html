@@ -24,7 +24,7 @@
       <p id="notice" role="status" aria-live="polite">
         Reading your escrow on Arc…
       </p>
-      <p id="deskSwitch" hidden><a data-step id="deskLink"></a> <small id="deskNote"></small></p>
+
       <section id="review" class="card" aria-label="Draft order" hidden>
         <div id="guide"><button class="bird portrait" aria-label="Animate the copper-winged sparrow">
         <span>
@@ -108,8 +108,12 @@
         <div id="arcFilters"></div>
         <div id="orderList"></div>
       </section>
+      <section id="signals" class="card" hidden aria-label="Speculative buying ideas">
+
+      </section>
       <section class="card" id="budget" hidden>
         <h2>Purchasing budget</h2>
+        <label id="budgetDeskLabel" hidden>Escrow account<select id="budgetDesk"><option value="current">Arc and Base orders</option><option value="original">Earlier Arc orders</option></select></label>
         <div id="balances"></div>
         <div id="manage">
           <form id="fund">
@@ -150,9 +154,10 @@
     </main>
     <nav aria-label="Workspace">
       <button data-view="orders" aria-current="page">Orders</button
-      ><button data-view="budget">Budget</button
+      ><button data-view="signals">Outlook</button><button data-view="budget">Budget</button
       ><button data-view="activity">Activity</button>
     </nav>
+    <dialog id="routeDialog" aria-labelledby="routeTitle"><h2 id="routeTitle">Switch supplier</h2><p id="routeTerms"></p><p id="routeFunding"></p><button id="closeRoute">Keep current supplier</button> <button id="approveRoute" class="primary">Approve with passkey</button></dialog>
     <dialog id="stockDialog" aria-labelledby="stockTitle">
       <h2 id="stockTitle">Review extra stock</h2><p id="stockReason"></p><p id="stockTerms"></p><p id="stockFunding"></p>
       <div class="actions"><button type="button" id="dismissStock">Not now</button><button class="primary" type="button" id="approveStock">Approve extra with passkey</button></div>

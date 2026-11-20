@@ -616,3 +616,17 @@ test("reset clears demo data across open tabs and preserves the wallet address",
   expect(liveDraft.lines[0].quantity).toBe(.01);
   await other.close();
 });
+
+test("a practice Outlook idea opens the material editor with the suggested asset", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"reduce"});
+  const expiry = new Date(Date.now()+86400000).toISOString();
+  await page.route("**/api/signals",r=>r.fulfill({json:{observed:new Date().toISOString(),groups:[{category:"Tech",events:[
+    {id:"example",title:"More chip fabrication plants?",outcome:{label:"Yes",probability:60,expiry},source:"https://api.gemini.com/"}
+  ]},{category:"Politics",events:[]}]}}));
+  await page.route("**/api/chat",r=>r.fulfill({json:{reply:"Ask about gas supply for fabrication.",series:"NGAS"}}));
+  await start(page);
+  await button(page,"Outlook").click();
+  await button(page,"Plan a Natural Gas purchase").click();
+  await expect(page.locator("#editor")).toBeVisible();
+  await expect(page.locator("#editor select")).toHaveValue("NGAS");
+});

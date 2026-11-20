@@ -20,7 +20,8 @@ async function enterSavedOrders(page) {
   await expect(page).toHaveURL(/arc\.html$/);
 }
 
-async function mockArc(page, getBalance, reads = {}) {
+async function mockArc(page, getBalance, reads = {}, legacyReads = {}) {
+  if (!reads.baseSupplier) await page.route("**/burn/USDC/fees/**", r=>r.fulfill({status:503,body:"unavailable"}));
   await page.route("https://rpc.testnet.arc.network/**", async (r) => {
     const req = r.request().postDataJSON();
     let result;
@@ -37,10 +38,12 @@ async function mockArc(page, getBalance, reads = {}) {
         abi,
         data: req.params[0].data,
       });
+      const source = req.params[0].to.toLowerCase() === network.escrow.toLowerCase() ? legacyReads : reads;
+      const defaults = {list:[],baseOffer:[0,0n],baseSupplier:network.routed.supplier};
       result = encodeFunctionResult({
         abi,
         functionName,
-        result: typeof reads[functionName] === "function" ? reads[functionName](...args) : reads[functionName] ?? (functionName === "list" ? [] : 0n),
+        result: typeof source[functionName] === "function" ? source[functionName](...args) : source[functionName] ?? defaults[functionName] ?? 0n,
       });
     }
     return r.fulfill({ json: { jsonrpc: "2.0", id: req.id, result } });
@@ -142,7 +145,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   const calls = await page.evaluate(() =>
     window.observedCalls.map((c) => ({ ...c, value: c.value.toString() })),
   );
-  expect(calls.every((c) => c.to === network.escrow)).toBe(true);
+  expect(calls.every((c) => c.to === network.routed.escrow)).toBe(true);
   expect(calls[0].value).toBe(parseEther(".06").toString());
   expect(decodeFunctionData({ abi, data: calls[0].data }).args[0]).toBe(
     parseEther("1"),
@@ -262,7 +265,7 @@ test("order filters show only the matching order’s market, purchases get icons
   await page.addInitScript(({buyer, refunded, escrow}) => {
     localStorage.setItem("forestock.arcWallet", buyer);
     localStorage.setItem("forestock.arcPlan." + escrow + "." + refunded, "0x" + "ab".repeat(32));
-  }, {buyer, refunded, escrow:network.escrow});
+  }, {buyer, refunded, escrow:network.routed.escrow});
   await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
   await mockArc(page, () => "1", {
     list:[paid, waiting, refunded], weeklyLimit: parseEther("1"), free: parseEther(".5"),
@@ -321,7 +324,7 @@ test("cross-chain review signs the cheaper delivered offer and the fee cap in on
   await page.route("**/base-offers.json",r=>r.fulfill({json:{terms,signature}}));
   await mockArc(page,()=>"2",{baseSupplier:supplier.address});
   await enterSavedOrders(page);
-  await page.getByRole("link",{name:"Compare Arc and Base suppliers"}).click();
+  await expect(page.locator("#quoteSource")).toContainText("Base Sepolia");
   await expect(page.locator("#lines")).toContainText("Base Sepolia");
   await page.locator("#orderTerms summary").click();
   await page.getByLabel("Let Sparrow buy in portions").uncheck();
@@ -468,4 +471,103 @@ test("stock-up suggestions require a separate passkey and cannot compound", asyn
   expect(decodeFunctionData({abi,data:submissions[0][0]})).toMatchObject({
     functionName:"plan",args:[salt,toHex("COPPER",{size:32}),25,copper.price,orderBy,70,false],
   });
+});
+
+test("older Arc needs and new orders share a list and switching needs one atomic approval",async({page})=>{
+  const buyer = "0x"+"12".repeat(20);
+  const oldId = "0x"+"31".repeat(32), currentId = "0x"+"32".repeat(32);
+  const deadline = BigInt(Math.floor(Date.now()/1000)+86400);
+  const order = {buyer,series:toHex("COPPER",{size:32}),quantityMilli:100,capCents:600,orderBy:deadline,
+    threshold:38,allowRecording:true,status:1,holdTime:0n,holdBlock:0n,settlementBlock:0n,amount:0n};
+  await page.addInitScript(b=>localStorage.setItem("forestock.arcWallet",b),buyer);
+  await page.route("**/generated/wallet-config.json",r=>r.fulfill({json:{clientKey:"test"}}));
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[]}}));
+  await page.route("**/burn/USDC/fees/26/6?*",r=>r.fulfill({json:[{finalityThreshold:2000,minimumFee:0,forwardFee:{high:53000}}]}));
+  const {generatePrivateKey,privateKeyToAccount} = await import("viem/accounts");
+  const supplier = privateKeyToAccount(generatePrivateKey());
+  const terms = {sourceChain:5042002,destinationChain:84532,escrow:network.routed.escrow,recipient:supplier.address,
+    expires:Number(deadline)+86400,leadHours:24,stock:500,unitCents:{COPPER:464}};
+  const signature = await supplier.signMessage({message:JSON.stringify(terms)});
+  await page.route("**/base-offers.json",r=>r.fulfill({json:{terms,signature}}));
+  await page.route("**/generated/circle.js",r=>r.fulfill({contentType:"application/javascript",body:`
+    export function hasWalletCredential(){return true} export function connectWallet(){} export function waitEscrowOperation(){}
+    export async function sendEscrowCalls(k,b,calls){window.calls=calls.map(({to,data})=>({to,data}));return {success:true,receipt:{status:"success",transactionHash:"0x"+"ab".repeat(32)}}}`}));
+  await mockArc(page,()=>"1",{baseSupplier:supplier.address,free:parseEther("1"),weeklyLimit:parseEther("1"),
+    list:[currentId],order:{...order,series:toHex("XAU",{size:32})}},
+    {list:[oldId],order,free:parseEther("2"),weeklyLimit:parseEther("3")});
+  await enterSavedOrders(page);
+  await expect(page.locator("#orderList article")).toHaveCount(2);
+  const earlier = page.locator('[data-order="old-'+oldId+'"]');
+  await earlier.getByText("Supplier offers · Arc selected").click();
+  await expect(earlier).toContainText("Base Sepolia $0.52");
+  await earlier.getByRole("button",{name:"Review Base offer"}).click();
+  await page.getByRole("button",{name:"Keep current supplier"}).click();
+  expect(await page.evaluate(()=>window.calls)).toBeUndefined();
+  await earlier.getByRole("button",{name:"Review Base offer"}).click();
+  await page.getByRole("dialog").getByRole("button",{name:"Approve with passkey"}).click();
+  await expect.poll(()=>page.evaluate(()=>window.calls?.length)).toBe(3);
+  const calls=await page.evaluate(()=>window.calls);
+  expect(calls.map(c=>c.to)).toEqual([network.escrow,network.routed.escrow,network.routed.escrow]);
+  const decoded=calls.map(c=>decodeFunctionData({abi,data:c.data}));
+  expect(decoded.map(c=>c.functionName)).toEqual(["cancel","plan","selectBase"]);
+  expect(decoded[0].args).toEqual([oldId]);
+  expect(decoded[1].args.slice(1)).toEqual([order.series,100,600,deadline,38,true]);
+  await page.getByRole("button",{name:"Budget",exact:true}).click();
+  await page.getByLabel("Escrow account").selectOption("original");
+  await expect(page.locator("#balances")).toContainText("In escrow 2");
+});
+
+test("Outlook analyzes a named outcome and opens material planning without signing",async({page})=>{
+  const buyer="0x"+"12".repeat(20);
+  await page.emulateMedia({reducedMotion:"reduce"});
+  await page.addInitScript(b=>localStorage.setItem("forestock.arcWallet",b),buyer);
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[]}}));
+  await mockArc(page,()=>"1");
+  const expiry = new Date(Date.now()+86400000).toISOString();
+  await page.route("**/api/signals",r=>r.fulfill({json:{observed:new Date().toISOString(),groups:["Tech","Politics"].map(category=>({
+    category,events:[{id:category,title:category==="Tech"?"New data center capacity?":"New import tariff?",category,
+      outcome:{label:"Yes",probability:62,expiry},source:"https://api.gemini.com/v1/prediction-markets/events"}]}))}}));
+  await page.route("**/api/chat",r=>{
+    const request=r.request().postDataJSON();
+    expect(request.mode).toBe("outlook");
+    const event=JSON.parse(request.marketContext).event;
+    return r.fulfill({json:event.category==="Tech"?{reply:"Ask your wiring supplier about copper lead times.",series:"COPPER"}:
+      {reply:"Check whether the tariff would cover your supplier.",series:null}});
+  });
+  await enterSavedOrders(page);
+  await page.getByRole("button",{name:"Outlook",exact:true}).click();
+  await expect(page.getByText("Yes · 62% implied")).toBeVisible();
+  await expect(page.getByText("Ask your wiring supplier about copper lead times.")).toBeVisible();
+  await page.getByRole("button",{name:"Politics",exact:true}).click();
+  await expect(page.getByText("Check whether the tariff would cover your supplier.")).toBeVisible();
+  await expect(page.getByRole("button",{name:/Plan a .* purchase/})).toHaveCount(0);
+  await page.getByRole("button",{name:"Tech",exact:true}).click();
+  await page.getByRole("button",{name:"Plan a Copper purchase"}).click();
+  await expect(page.getByRole("log")).toContainText("How much do you need");
+  await expect(page.locator("#draftNeeds")).toContainText("Copper");
+  expect(await page.evaluate(b=>localStorage.getItem("forestock.arcDraft."+b),buyer)).toBeNull();
+  for (const name of ["0.01 lb","1 USDC","Review order"]) await page.getByRole("button",{name,exact:true}).click();
+  await page.getByText("Why Sparrow suggested this").click();
+  await expect(page.locator("#lines")).toContainText("New data center capacity?");
+  await expect(page.locator("#lines")).toContainText("Ask your wiring supplier about copper lead times.");
+});
+
+test("separate purchases have distinct blocks and signed portions stay together when filtering",async({page})=>{
+  const buyer = "0x"+"12".repeat(20);
+  const root = "0x"+"30".repeat(32);
+  const silver = "0x"+"90".repeat(32);
+  const parts = [root,orderId(buyer,relatedSalt(root,"part1")),orderId(buyer,relatedSalt(root,"part2"))];
+  await page.addInitScript(b=>localStorage.setItem("forestock.arcWallet",b),buyer);
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[]}}));
+  await mockArc(page,()=>"1",{list:[...parts,silver],order:id=>({buyer,series:toHex(id===silver?"XAG":"COPPER",{size:32}),
+    quantityMilli:10,capCents:6000,orderBy:BigInt(Math.floor(Date.now()/1000)+86400),threshold:10,
+    allowRecording:false,status:1,holdTime:0n,holdBlock:0n,settlementBlock:0n,amount:0n})});
+  await enterSavedOrders(page);
+  const family=page.locator(".purchase-family");
+  await expect(family.getByRole("heading",{name:"Copper · 0.03 lb total"})).toBeVisible();
+  await expect(family.locator("article")).toHaveCount(3);
+  await expect(family.locator("article").first()).toContainText("Portion 1 of 3");
+  await expect(page.locator("#orderList > article")).toHaveCount(1);
+  await page.getByRole("combobox",{name:"Material",exact:true}).selectOption("XAG");
+  await expect(family).toBeHidden();
 });
