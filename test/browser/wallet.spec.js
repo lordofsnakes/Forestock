@@ -17,6 +17,7 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
     const { method, id, params } = route.request().postDataJSON();
     methods.push(method);
     let result;
+    if (method === "rp_getRegistrationOptions") expect(params[0]).toMatch(/^[A-Za-z0-9_@.:+\-]{5,50}$/);
     if (method === "rp_getRegistrationOptions") result = {
       challenge, rp: { name: "Forestock", id: "localhost" },
       user: { id: challenge, name: params[0], displayName: "Buyer" },
@@ -33,7 +34,7 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
     return route.fulfill({ json: { id, jsonrpc: "2.0", result } });
   });
   await page.goto("http://localhost:3271/");
-  await expect(page.getByRole("heading", { name: "Your purchasing desk" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Let’s plan a purchase" })).toBeVisible();
   await expect(page.locator("#welcome")).toBeHidden();
   await page.getByRole("button", { name: "Create a passkey" }).click();
   await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
@@ -52,4 +53,19 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
   expect(methods).toEqual(["rp_getRegistrationOptions","rp_getRegistrationVerification","circle_getAddress",
     "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress",
     "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress"]);
+});
+
+
+test("a dismissed passkey prompt can be retried on the welcome screen", async ({ page }) => {
+  await page.route("**/generated/wallet-config.json", route => route.fulfill({ json: { clientKey: "test-client" } }));
+  await page.route("**/generated/circle.js", route => route.fulfill({
+    contentType: "application/javascript",
+    body: 'export async function connectWallet() { throw new DOMException("Dismissed", "NotAllowedError"); }',
+  }));
+  await page.goto("/");
+  const register = page.getByRole("button", { name: "Create a passkey" });
+  await register.click();
+  await expect(page.locator("#walletControls [role=status]")).toContainText("Tap again to retry");
+  await expect(register).toBeEnabled();
+  await expect(page.locator("#welcome")).toBeHidden();
 });

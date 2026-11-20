@@ -95,8 +95,18 @@ controls.addEventListener("click", async event => {
     showAddress();
     status.textContent = "Passkey verified. Your Arc Testnet wallet address is ready.";
     connected = true;
-  } catch {
-    status.textContent = "Wallet setup didn’t finish. If your device saved a passkey, choose Use existing passkey to reconnect.";
+  } catch (error) {
+    if (error.name === "NotAllowedError" || error.name === "AbortError") {
+      status.textContent = "The passkey prompt was dismissed or timed out. Tap again to retry.";
+    } else if (error.name === "InvalidStateError" || error.name === "WalletAddressError") {
+      options.hidden = false;
+      manual.setAttribute("aria-expanded", "true");
+      status.textContent = error.name === "WalletAddressError"
+        ? "Your passkey was verified. Choose Use existing passkey to load your wallet."
+        : "A passkey already exists on this device. Choose Use existing passkey.";
+    } else {
+      status.textContent = "Passkey setup is unavailable. Try again, or open Manual setup for other options.";
+    }
   } finally {
     busy = false;
     buttons.forEach(b => b.disabled = false);

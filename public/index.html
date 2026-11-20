@@ -24,11 +24,35 @@
       <button id="openWallet" hidden type="button">Set up wallet</button>
     </header>
     <section id="walletIntro" aria-labelledby="walletHeading">
-      <h1 id="walletHeading">Your purchasing desk</h1>
+      <h1 id="walletHeading">Let’s plan a purchase</h1>
       <div id="walletControls">
         <div class="account-actions">
           <div class="perch">
-            <span class="bird perch-bird" aria-hidden="true"><span></span></span>
+            <span class="bird perch-bird" aria-hidden="true"><span>
+              <svg viewBox="0 0 480 480" focusable="false">
+                <defs>
+                  <image id="perch-art" href="/sparrow-front.png" width="480" height="480"/>
+                  <path id="left-feathers" d="M 115 177 Q 173 202 172 251 Q 171 313 109 347 Q 89 357 74 327 Q 50 250 115 177 Z"/>
+                  <path id="right-feathers" d="M 361 177 Q 305 202 306 253 Q 308 314 367 347 Q 393 358 405 323 Q 428 246 361 177 Z"/>
+                  <clipPath id="left-wing-clip"><use href="#left-feathers"/></clipPath>
+                  <clipPath id="right-wing-clip"><use href="#right-feathers"/></clipPath>
+                  <mask id="perch-body">
+                    <rect width="480" height="480" fill="white"/>
+                    <use href="#left-feathers" stroke="black" stroke-width="6"/>
+                    <use href="#right-feathers" stroke="black" stroke-width="6"/>
+                  </mask>
+                  <clipPath id="breast-clip">
+                    <path d="M 120 176 C 83 238 77 327 118 358 Q 240 445 360 358 C 401 321 392 230 358 176 Z"/>
+                  </clipPath>
+                </defs>
+                <g clip-path="url(#breast-clip)">
+                  <use href="#perch-art" transform="translate(-360 0) scale(2.5 1)"/>
+                </g>
+                <use href="#perch-art" mask="url(#perch-body)"/>
+                <g class="perch-wing left-wing"><use href="#perch-art" clip-path="url(#left-wing-clip)"/></g>
+                <g class="perch-wing right-wing"><use href="#perch-art" clip-path="url(#right-wing-clip)"/></g>
+              </svg>
+            </span></span>
             <button data-register class="primary" disabled>Create a passkey</button>
             <button id="continueSetup" class="primary" hidden>Continue to order planning</button>
           </div>

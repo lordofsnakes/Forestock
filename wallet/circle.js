@@ -12,12 +12,16 @@ export async function connectWallet(key, register) {
   const credential = await toWebAuthnCredential({
     transport: toPasskeyTransport(url, key),
     mode: register ? WebAuthnMode.Register : WebAuthnMode.Login,
-    ...(register && { username: "Forestock " + crypto.randomUUID().slice(0, 8) }),
+    ...(register && { username: "Forestock-" + crypto.randomUUID() }),
   });
-  const account = await toCircleSmartAccount({
-    client: createPublicClient({ chain: arcTestnet, transport: toModularTransport(url + "/arcTestnet", key) }),
-    owner: toWebAuthnAccount({ credential }),
-    name: "Forestock",
-  });
-  return getAddress(account.address);
+  try {
+    const account = await toCircleSmartAccount({
+      client: createPublicClient({ chain: arcTestnet, transport: toModularTransport(url + "/arcTestnet", key) }),
+      owner: toWebAuthnAccount({ credential }),
+      name: "Forestock",
+    });
+    return getAddress(account.address);
+  } catch (cause) {
+    throw Object.assign(new Error("Couldn’t load the Arc wallet address.", { cause }), { name: "WalletAddressError" });
+  }
 }
