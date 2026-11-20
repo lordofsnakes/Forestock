@@ -61,6 +61,7 @@
         <div id="manualOptions" hidden>
           <button data-login disabled>Use existing passkey</button>
           <button data-demo>Continue with demo balance</button>
+          <button data-action="reset">Reset demo workspace</button>
         </div>
         <p role="status">Preparing passkey setup…</p>
         <output aria-label="Wallet address" hidden></output>
@@ -132,6 +133,14 @@
       <h2 id="walletTitle">Your Arc Testnet wallet</h2>
       <button data-dismiss>Close</button>
     </dialog>
+    <dialog id="resetDemo" aria-labelledby="resetTitle">
+      <h2 id="resetTitle">Reset this demo workspace?</h2>
+      <p>Clear the orders and activity saved in this browser and start again with 1,000 demo USDC and a 600 USDC weekly allowance. Your passkey and Arc wallet stay connected.</p>
+      <div class="actions">
+        <button data-close>Cancel</button>
+        <button id="confirmReset" class="primary">Reset demo workspace</button>
+      </div>
+    </dialog>
     <dialog id="thresholdEditor" aria-labelledby="thresholdTitle">
       <form>
         <h2 id="thresholdTitle">Early-order threshold</h2>
@@ -139,6 +148,7 @@
         <label>Minimum market probability (%)
           <input name="threshold" type="number" min="1" max="100" step="1" inputmode="numeric" required autofocus>
         </label>
+        <p id="thresholdPreview" role="status"></p>
         <div class="actions">
           <button type="button" data-close>Cancel</button>
           <button type="submit" class="primary">Save threshold</button>
@@ -153,7 +163,8 @@
           >Quantity required (<span data-unit>lb</span>)<input
             name="qty"
             type="number"
-            min="1"
+            step="0.001"
+            min="0.001"
             max="10000"
             required /></label
         ><label

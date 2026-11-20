@@ -24,7 +24,7 @@ try {
     true,
   );
   await page.getByRole("button", { name: "Copper", exact: true }).click();
-  await page.getByRole("button", { name: "1 lb", exact: true }).click();
+  await page.getByRole("button", { name: "0.01 lb", exact: true }).click();
   await page.getByRole("button", { name: "600 USDC", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   const threshold = page.getByRole("button", { name: /Early-order threshold/ });

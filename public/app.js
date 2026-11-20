@@ -1,6 +1,6 @@
 import { flyToScreen } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
-import { day, week, refresh, evaluate, currentQuote, defaultThreshold, thresholdFor, midpointPercent } from "./decision.js";
+import { day, week, refresh, evaluate, currentQuote, defaultThreshold, thresholdFor, midpointPercent, totalCents, defaultQuantity } from "./decision.js";
 const el = document.querySelector("#app"),
   dialog = document.querySelector("#editor"),
   form = document.querySelector("#orderForm");
@@ -35,7 +35,7 @@ function initial() {
     paused: false,
     order: {
       threshold: defaultThreshold,
-      qty: 1,
+      qty: .01,
       cap: 600,
       due: now() + 2 * day,
       notes: "",
@@ -153,6 +153,7 @@ function fillPickers() {
 }
 form.elements.asset.addEventListener("change", () => {
   updatePicker(form);
+  if (addingNeed) form.qty.value = defaultQuantity(selected(form));
   form.cap.value = ((selected(form).price / 100) * 1.03).toFixed(2);
 });
 const chat = startChat({
@@ -243,7 +244,7 @@ function openMarketChat(note) {
     (o.status === "Watching" ? selectedOrigin + assessment(source).reason :
       "Your " + current().name + " order is " + ({ Held: "awaiting supplier confirmation.", Paid: "paid.", Refunded: "refunded." }[o.status]));
   const context = "Selected order: " + o.qty + " " + current().unit + " of " + current().name +
-    ", status " + o.status + ", needed by " + dt(o.due) + ". Simulated supplier total: " + money(o.qty * current().price) +
+    ", status " + o.status + ", needed by " + dt(o.due) + ". Simulated supplier total: " + money(totalCents(o.qty, current().price)) +
     ". Early-order threshold: " + thresholdFor(o) + "%. Available demo budget: " + money(available()) + ".\nOrder assessment: " + impact +
     "\nTapped update: " + quote + "\nQuotes on Orders:\n" + snapshot;
   chat.marketConversation(o.id, { quote, impact }, context,
@@ -271,7 +272,7 @@ function orderActions(decision, total) {
   return decision.fix === "budget" ? btn("Review budget", "budget", true) + edit : btn("Edit need", "edit", true);
 }
 
-function render(check) {
+function render(check, savedThreshold = false) {
   if (inSetup) return;
   const expanded = new Set(
     [...el.querySelectorAll("details[open] summary")].map((n) => n.textContent),
@@ -280,7 +281,7 @@ function render(check) {
   save();
   const { price, name, unit, premium } = current();
   const o = order(),
-    total = o.qty * price;
+    total = totalCents(o.qty, price);
   for (const b of document.querySelectorAll("[data-tab]"))
     b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
   if (tab === "Orders") {
@@ -310,6 +311,7 @@ function render(check) {
       ) +
       "</p>" +
       (check && open ? '<p class="check-result" role="status">' +
+        (savedThreshold ? "Saved " + thresholdFor(o) + "%. " : "") +
         ({ Wait: "Checked just now. Your order is still waiting.", Blocked: "Order blocked. No funds were reserved.", Buy: "Conditions met. You can place this order." }[check.kind]) + "</p>" : "") +
       '<p class="hint">' +
       (open && replay ? "Simulated purchase · Recorded forecast from " + dt(market.observed)
@@ -381,7 +383,7 @@ function render(check) {
       row("Limit", money(s.limit)) +
       row("Committed this week", money(s.used)) +
       row("Uncommitted balance", money(s.balance)) +
-      row("Funds held", money(s.orders.reduce((sum, need) => sum + (need.status === "Held" ? need.qty * (need.asset || copper).price : 0), 0))) +
+      row("Funds held", money(s.orders.reduce((sum, need) => sum + (need.status === "Held" ? totalCents(need.qty, (need.asset || copper).price) : 0), 0))) +
       row("Resets", dt((s.week + 1) * 7 * day - 3 * day)) +
       '<progress max="' +
       Math.max(1, s.limit) +
@@ -392,7 +394,8 @@ function render(check) {
       '"></label><div class="actions">' +
       btn(s.paused ? "Resume" : "Pause", "pause") +
       btn("Save allowance", "limit", true) +
-      "</div></section>";
+      "</div></section><section><p>Demo orders use this browser’s practice balance. No faucet tokens are needed.</p>" +
+      btn("Reset demo workspace", "reset") + "</section>";
   } else {
     el.innerHTML =
       '<h1>Activity</h1><section class="card">' +
@@ -487,10 +490,16 @@ document.addEventListener("click", async (e) => {
   const { price } = current();
   const a = b.dataset.action,
     o = order();
+  const total = totalCents(o.qty, price);
   refresh(s, now());
+  if (a === "reset") {
+    document.querySelector("#resetDemo").showModal();
+    return;
+  }
   if (a === "threshold" && o.status === "Watching") {
     thresholdForm.elements.threshold.value = thresholdFor(o);
     thresholdForm.querySelector("h2").textContent = current().name + " early-order threshold";
+    previewThreshold();
     thresholdDialog.showModal();
     thresholdForm.elements.threshold.select();
     return;
@@ -500,7 +509,7 @@ document.addEventListener("click", async (e) => {
     const template = addingNeed ? initial().order : o;
     form.elements.asset.value = current().series;
     updatePicker(form);
-    form.qty.value = template.qty;
+    form.qty.value = addingNeed ? defaultQuantity(current()) : template.qty;
     form.cap.value = addingNeed ? Math.ceil(current().price * 1.035) / 100 : o.cap / 100;
     form.notes.value = template.notes;
     const local = new Date(Math.max(template.due, now() + day));
@@ -548,8 +557,8 @@ document.addEventListener("click", async (e) => {
     const d = assessment(source, a === "cutoff" ? o.due - day : now());
     const recorded = source.replay && d.contract ? source.market.observed : null;
     if (d.kind === "Buy") {
-      s.used += o.qty * price;
-      s.balance -= o.qty * price;
+      s.used += total;
+      s.balance -= total;
       o.status = "Held";
       o.commitWeek = s.week;
       if (recorded) o.replayObserved = recorded;
@@ -557,7 +566,7 @@ document.addEventListener("click", async (e) => {
     record(
       (a === "cutoff" ? "Cutoff scenario · " : "") + d.kind,
       (recorded ? "Recorded forecast from " + dt(recorded) + ". " : "") + d.reason +
-        (d.kind === "Buy" ? " Held " + money(o.qty * price) + "." : ""),
+        (d.kind === "Buy" ? " Held " + money(total) + "." : ""),
     );
     render(d);
     el.querySelector(".order-status h2").focus();
@@ -565,13 +574,13 @@ document.addEventListener("click", async (e) => {
   }
   if (o.status === "Held" && (a === "accept" || a === "decline")) {
     if (a === "decline") {
-      s.balance += o.qty * price;
-      if (o.commitWeek === s.week) s.used -= o.qty * price;
+      s.balance += total;
+      if (o.commitWeek === s.week) s.used -= total;
     }
     o.status = a === "accept" ? "Paid" : "Refunded";
     record(
       o.status,
-      money(o.qty * price) + " · simulated " + current().name + " order",
+      money(total) + " · simulated " + current().name + " order",
     );
   }
   render();
@@ -579,6 +588,21 @@ document.addEventListener("click", async (e) => {
 const thresholdDialog = document.querySelector("#thresholdEditor");
 const thresholdForm = thresholdDialog.querySelector("form");
 thresholdDialog.querySelector("#defaultThreshold").textContent = defaultThreshold;
+function previewThreshold() {
+  const input = thresholdForm.elements.threshold;
+  const preview = document.querySelector("#thresholdPreview");
+  if (!input.validity.valid) {
+    preview.textContent = "Enter a whole percentage from 1 to 100.";
+    return;
+  }
+  const source = forecast();
+  const t = now();
+  const result = evaluate({ ...s, order: { ...order(), threshold: input.valueAsNumber } }, source.market, t,
+    source.replay ? Date.parse(source.market.observed) : t);
+  preview.textContent = (source.replay ? "Recorded forecast · " : "") +
+    ({ Buy: "Ready to order. ", Wait: "Still watching. ", Blocked: "Order blocked. " }[result.kind]) + result.reason;
+}
+thresholdForm.elements.threshold.addEventListener("input", previewThreshold);
 thresholdForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const value = thresholdForm.elements.threshold.valueAsNumber;
@@ -586,8 +610,10 @@ thresholdForm.addEventListener("submit", (e) => {
   order().threshold = value;
   record("Early-order threshold updated", current().name + " · " + value + "%");
   thresholdDialog.close();
-  render();
-  el.querySelector(".threshold-setting").focus({ preventScroll: true });
+  render(assessment(forecast()), true);
+  const result = el.querySelector(".check-result");
+  result.tabIndex = -1;
+  result.focus();
 });
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -628,6 +654,21 @@ async function updateMarket() {
   fillPickers();
   if (tab === "Orders") render();
 }
+const resetDialog = document.querySelector("#resetDemo");
+document.querySelector("#confirmReset").onclick = () => {
+  localStorage.removeItem(key);
+  location.reload();
+};
+window.addEventListener("storage", event => {
+  if (event.key === key && event.newValue === null) location.reload();
+});
+function openResetLink() {
+  if (location.hash !== "#reset-demo") return;
+  history.replaceState(null, "", location.pathname + location.search);
+  if (!resetDialog.open) resetDialog.showModal();
+}
+window.addEventListener("hashchange", openResetLink);
+openResetLink();
 render();
 loadMarket();
 setInterval(loadMarket, 60000);

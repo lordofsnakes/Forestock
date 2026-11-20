@@ -63,7 +63,7 @@ test("the chat keeps incomplete material lines and buyer wording until clarified
   assert.equal(guarded.data.draft.quantity, null);
   assert.equal(guarded.data.draft.amountNote, "100 mg");
   assert.equal(guarded.data.draft.dateNote, "end of this week");
-  assert.match(guarded.data.reply, /1 lb/);
+  assert.ok(guarded.data.reply.includes("0.001 lb"));
   proposal.additional.unshift({ label: "Copper", series: "COPPER", quantity: null, dateNote: "2026-11-27" });
   proposal.series = proposal.quantity = null;
   const promoted = await request({ ...body, catalog });
@@ -107,4 +107,18 @@ test("market chat uses the calculated order assessment for threshold comparisons
   const answer = (await request(input)).data.reply;
   assert.match(answer, /midpoint of the bid and ask/);
   assert.ok(answer.endsWith(marketFacts.quote + " " + marketFacts.impact));
+});
+
+test("the sparrow accepts thousandth-unit requests and rejects finer order quantities", async t => {
+  const previous = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
+  const fractional = { ...draft, quantity: .001 };
+  t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: {
+    content: JSON.stringify({ reply: "Got it.", draft: fractional }),
+  } }] }));
+  const response = await request({ ...body, draft: fractional, messages: [{ role: "user", content: "I need 0.001 lb of copper." }] });
+  assert.equal(response.code, 200);
+  assert.equal(response.data.draft.quantity, .001);
+  assert.equal((await request({ ...body, draft: { ...draft, quantity: .0009 } })).code, 400);
 });

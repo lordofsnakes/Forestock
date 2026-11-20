@@ -293,6 +293,7 @@ nav button[aria-current="page"] {
 .buyer { margin-left: auto; background: #774323; color: #fffaf1; border-radius: 14px 2px 14px 14px; }
 .reply-area { padding-top: 10px; border-top: 1px solid #dfd0bb; }
 #suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+#suggestions small { align-self: center; }
 #suggestions button { font-size: 14px; min-height: 40px; padding: 6px 12px; border-radius: 20px; }
 #setup { display: flex; align-items: stretch; gap: 8px; }
 #setup input { min-width: 0; margin: 0; }

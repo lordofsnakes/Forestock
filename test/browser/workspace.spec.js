@@ -18,7 +18,7 @@ async function finishSetup(page) {
   if (await button(page, "Copper").isVisible()) {
     await button(page, "Copper").click();
   }
-  if (await page.locator("#suggestions button").filter({ hasText: /^\d+ (lb|MMBtu|bbl|troy oz)$/ }).isVisible()) {
+  if (await page.locator("#suggestions button").filter({ hasText: /^\d+(?:\.\d+)? (lb|MMBtu|bbl|troy oz)$/ }).isVisible()) {
     await page.locator("#suggestions button").first().click();
   }
   await page.locator("#suggestions button").filter({ hasText: "USDC" }).click();
@@ -76,7 +76,7 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await button(page, "Simulate ordering at the deadline").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$584.20");
+  await expect(page.locator(".big")).toHaveText("$589.94");
   await button(page, "Orders").click();
   await button(page, "Decline").click();
   await page.reload();
@@ -120,7 +120,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
   await expect(
     page.getByRole("heading", { name: "Ready to order" }),
   ).toBeVisible();
-  await button(page, "Place demo order · $5.80").click();
+  await button(page, "Place demo order · $0.06").click();
   await page.reload();
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
@@ -135,7 +135,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
     page.getByRole("heading", { name: "Supplier receipt" }),
   ).toBeVisible();
   await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$594.20");
+  await expect(page.locator(".big")).toHaveText("$599.94");
 });
 test("legacy orders require onboarding; mascot respects reduced motion", async ({
   page,
@@ -238,7 +238,7 @@ test("AI outage keeps the message available for retry and quick replies still wo
   await expect(page.getByRole("log")).toContainText("couldn’t reach AI chat");
   await expect(page.getByRole("textbox")).toHaveValue("What is a weekly allowance?");
   await finishSetup(page);
-  await expect(page.locator(".order-summary")).toContainText("1 lb");
+  await expect(page.locator(".order-summary")).toContainText("0.01 lb");
 });
 
 test("multiple needs survive a reload and settle against one shared balance", async ({ page }) => {
@@ -254,10 +254,10 @@ test("multiple needs survive a reload and settle against one shared balance", as
     await cutoff.click();
   }
   await hold();
-  await page.getByRole("button", { name: /Copper · 1 lb/ }).click();
+  await page.getByRole("button", { name: /Copper · 0.01 lb/ }).click();
   await hold();
   await button(page, "Budget").click();
-  const held = 580 + data.assets.find(a => a.series === "NGAS").price;
+  const held = 6 + data.assets.find(a => a.series === "NGAS").price;
   await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText((held / 100).toFixed(2));
   await page.reload();
   await page.getByRole("button", { name: "Manual setup" }).click();
@@ -285,7 +285,7 @@ test("the sparrow flies from the conversation to the reviewed orders", async ({ 
   expect(afterSwap.attached).toBe(true);
   expect(afterSwap.time).toBeGreaterThan(beforeSwap);
   await button(page, "Natural Gas").click();
-  await button(page, "1 MMBtu").click();
+  await button(page, "0.01 MMBtu").click();
   await button(page, "600 USDC").click();
   await button(page, "Review order").click();
   await expect(page.locator(".courier")).toBeAttached();
@@ -326,7 +326,7 @@ test("a returning buyer can clarify a mixed-material request and review all thre
   await send(page, "Make it 1 lb copper by February 5 2027, 2 bbl Brent and 3 troy oz gold. 3000 USDC/week.");
   await button(page, "Review order").click();
   const state = await page.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")));
-  expect(state.orders.map(o => [o.asset.series, o.qty])).toEqual([["NGAS", 1], ["COPPER", 1], ["BRENT", 2], ["XAU", 3]]);
+  expect(state.orders.map(o => [o.asset.series, o.qty])).toEqual([["NGAS", 0.01], ["COPPER", 1], ["BRENT", 2], ["XAU", 3]]);
   const date = await page.evaluate(() => new Date("2027-02-05T23:59:00").getTime());
   expect(state.orders[1].due).toBe(date);
   expect(state.limit).toBe(300000);
@@ -366,13 +366,14 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
 });
 
 
-test("a commodity above the available demo budget has no suggested purchase quantity", async ({ page }) => {
+test("gold onboarding offers a small fractional order within the demo budget", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await button(page, "Manual setup").click();
   await button(page, "Continue with demo balance").click();
   await button(page, "Gold").click();
-  await expect(page.locator("#suggestions")).toContainText("Your demo spending balance is 600.00 USDC");
+  await expect(button(page, "0.001 troy oz")).toBeVisible();
+  await expect(page.locator("#suggestions")).toContainText("$3.80 in demo funds");
   await expect(button(page, "1 troy oz")).toHaveCount(0);
 });
 
@@ -383,7 +384,7 @@ test("a partial live response replays the matching copper quote through to a rec
   await start(page);
   await expect(page.locator(".order-status")).toContainText("70%");
   await expect(page.locator(".order-status")).toContainText("Recorded forecast from");
-  await button(page, "Place demo order · $5.80").click();
+  await button(page, "Place demo order · $0.06").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Accept order").click();
   await expect(page.getByRole("heading", { name: "Supplier receipt" })).toBeVisible();
@@ -391,7 +392,7 @@ test("a partial live response replays the matching copper quote through to a rec
   await button(page, "Activity").click();
   const buy = page.locator(".log").filter({ has: page.getByRole("heading", { name: "Buy", exact: true }) });
   await expect(buy).toContainText("Recorded forecast from");
-  await expect(buy).toContainText("Held $5.80");
+  await expect(buy).toContainText("Held $0.06");
 });
 
 test("a buyer can switch a waiting live copper order to the dated recording and back", async ({ page }) => {
@@ -449,10 +450,10 @@ test("refresh explains a wait on Orders and a qualifying quote requires an expli
   await expect(status.getByRole("status")).toContainText("Conditions met");
   const state = () => page.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")));
   expect((await state()).used).toBe(0);
-  await button(page, "Place demo order · $5.80").click();
+  await button(page, "Place demo order · $0.06").click();
   await expect(status.getByRole("heading", { name: "Funds held" })).toBeFocused();
-  await expect(status).toContainText("$5.80 in demo funds is reserved for 1 lb of Copper");
-  expect((await state()).used).toBe(580);
+  await expect(status).toContainText("$0.06 in demo funds is reserved for 0.01 lb of Copper");
+  expect((await state()).used).toBe(6);
   await button(page, "Activity").click();
   await expect(page.getByRole("heading", { name: "Forecast checked" })).toHaveCount(2);
 });
@@ -496,7 +497,7 @@ test("a market bubble opens a contextual sparrow chat and returns to the same or
   await expect(page.getByRole("log")).toContainText("42%");
   await button(page, "How does this affect my order?").click();
   await expect(page.getByRole("log")).toContainText("separate forecast");
-  expect(requests[0].marketContext).toContain("1 lb of Copper");
+  expect(requests[0].marketContext).toContain("0.01 lb of Copper");
   expect(requests[0].marketContext).toContain("Silver at $47");
   await button(page, "Back to Orders").click();
   await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
@@ -525,6 +526,12 @@ test("each need keeps its own threshold and selecting materials keeps the list i
   await input.fill("0");
   await button(page, "Save threshold").click();
   await expect(input).toBeVisible();
+  await input.fill("30");
+  await expect(page.locator("#thresholdPreview")).toContainText("5.5%");
+  await expect(page.locator("#thresholdPreview")).toContainText("below your 30%");
+  await button(page, "Save threshold").click();
+  await expect(status.getByRole("status")).toContainText("Saved 30%");
+  await setting.click();
   await input.fill("5");
   await button(page, "Save threshold").click();
   await expect(status.getByRole("heading")).toHaveText("Ready to order");
@@ -548,6 +555,33 @@ test("each need keeps its own threshold and selecting materials keeps the list i
   await finishSetup(page);
   await entry("Silver").first().click();
   await expect(setting).toContainText("5%");
-  await button(page, "Place demo order · $" + (data.assets.find(a => a.series === "XAG").price / 100).toFixed(2)).click();
+  await button(page, "Place demo order · $0.46").click();
   await expect(status.getByRole("heading")).toHaveText("Funds held");
+});
+
+test("reset clears demo data across open tabs and preserves the wallet address", async ({ page, context }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page);
+  await button(page, "Budget").click();
+  await button(page, "Pause").click();
+  const wallet = "0x" + "1".repeat(40);
+  await page.evaluate(address => localStorage.setItem("forestock.arcWallet", address), wallet);
+  const other = await context.newPage();
+  await other.goto("/#reset-demo");
+  const reset = other.getByRole("dialog", { name: "Reset this demo workspace?" });
+  await expect(reset).toBeVisible();
+  await reset.getByRole("button", { name: "Cancel" }).click();
+  expect(await other.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")).paused)).toBe(true);
+  await button(other, "Manual setup").click();
+  await button(other, "Reset demo workspace").click();
+  await reset.getByRole("button", { name: "Reset demo workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Let’s plan a purchase" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("forestock.v1"))).toBe(null);
+  expect(await other.evaluate(() => localStorage.getItem("forestock.arcWallet"))).toBe(wallet);
+  await button(page, "Continue to order planning").click();
+  await finishSetup(page);
+  await button(page, "Budget").click();
+  await expect(page.locator(".big")).toHaveText("$600.00");
+  await expect(page.locator(".row").filter({ hasText: "Uncommitted balance" })).toContainText("$1,000.00");
+  await other.close();
 });

@@ -105,3 +105,11 @@ test("orders use 50% by default and qualify at their own exact threshold", () =>
   assert.equal(evaluate(stricter, null, t + day).kind, "Buy");
   assert.equal(evaluate({ ...s, paused: true }, even, t).kind, "Blocked");
 });
+
+test("fractional demo orders reserve whole cents and explain an insufficient allowance", () => {
+  const small = { ...s, order: { ...s.order, qty: .01 }, limit: 6 };
+  assert.equal(evaluate(small, m, t).kind, "Buy");
+  const blocked = evaluate({ ...small, limit: 5 }, m, t);
+  assert.equal(blocked.kind, "Blocked");
+  assert.match(blocked.reason, /costs \$0\.06.*\$0\.05 available/);
+});

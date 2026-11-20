@@ -1,3 +1,4 @@
+import { defaultQuantity, minimumQuantity, totalCents } from "./decision.js";
 import { sparrowSpeech } from "./sparrow-speech.js";
 
 export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish }) {
@@ -99,14 +100,21 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       if (line.quantity !== null || line.amountNote || draft.additional?.length) return;
       const asset = selected(line);
       const funds = availableFunds(draft.allowance === null ? undefined : Math.round(draft.allowance * 100));
-      if (asset.price > funds) {
-        suggestions.textContent = "One " + asset.unit + " costs " + (asset.price / 100).toFixed(2) +
+      const preferred = defaultQuantity(asset);
+      const suggested = totalCents(preferred, asset.price) <= funds ? preferred : minimumQuantity;
+      const cost = totalCents(suggested, asset.price);
+      if (cost > funds) {
+        suggestions.textContent = "The smallest order (" + minimumQuantity + " " + asset.unit + ") costs " + (cost / 100).toFixed(2) +
           " USDC. Your demo spending balance is " + (funds / 100).toFixed(2) + " USDC.";
+        offer("Reset demo workspace", () => document.querySelector("#resetDemo").showModal());
         return;
       }
-      const label = "1 " + asset.unit;
-      offer(label, () => pick(label, line, { quantity: 1 }));
-      if (returning && material.series === line.series && quantity > 1 && quantity * asset.price <= funds) {
+      const label = suggested + " " + asset.unit;
+      offer(label, () => pick(label, line, { quantity: suggested }));
+      const quote = document.createElement("small");
+      quote.textContent = "$" + (cost / 100).toFixed(2) + " in demo funds";
+      suggestions.append(quote);
+      if (returning && material.series === line.series && quantity !== suggested && totalCents(quantity, asset.price) <= funds) {
         const keep = "Keep " + quantity + " " + asset.unit;
         offer(keep, () => pick(keep, line, { quantity }));
       }
