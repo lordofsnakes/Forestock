@@ -48,6 +48,7 @@
           </div>
           <details id="orderTerms"><summary><span>Buying rules</span><small id="termsSummary"></small></summary>
           <div class="review-settings">
+          <label class="arc-checkbox"><input type="checkbox" name="flexible" checked>Let Sparrow buy in portions as forecasts strengthen</label>
           <div id="priceCaps"></div>
           <label
             >Weekly spending limit (test USDC)<input
@@ -152,6 +153,10 @@
       ><button data-view="budget">Budget</button
       ><button data-view="activity">Activity</button>
     </nav>
+    <dialog id="stockDialog" aria-labelledby="stockTitle">
+      <h2 id="stockTitle">Review extra stock</h2><p id="stockReason"></p><p id="stockTerms"></p><p id="stockFunding"></p>
+      <div class="actions"><button type="button" id="dismissStock">Not now</button><button class="primary" type="button" id="approveStock">Approve extra with passkey</button></div>
+    </dialog>
     <dialog id="editThreshold">
       <form id="thresholdForm">
         <h2>Early-order threshold</h2>

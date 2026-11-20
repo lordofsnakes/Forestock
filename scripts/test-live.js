@@ -15,6 +15,8 @@ import {
 } from "viem";
 import { foundry as chain } from "viem/chains";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { sizedPurchases } from "../lib/purchase-sizing.js";
+import { chooseOffer } from "../lib/supplier-offers.js";
 import { liveAbi as abi } from "../lib/live-abi.js";
 
 const run = promisify(execFile),
@@ -133,6 +135,26 @@ try {
     );
     if (eventName === "Held") assert.equal(log.args.recorded, true);
   }
+  // The archived market is at 70%. It qualifies two portions, then stays flat.
+  const head = await client.getBlock();
+  const line = {quantity:.03,price:580,cap:600,salt:stringToHex("adaptive",{size:32})};
+  const portions = sizedPurchases(line,buyer.account.address,50,true,l=>chooseOffer(l,null,null,0));
+  const deadline = head.timestamp+86400n;
+  await receipt(await buyer.writeContract({address,abi,functionName:"configure",args:[parseEther("1")],value:parseEther(".18")}));
+  for (const part of portions) await receipt(await buyer.writeContract({address,abi,functionName:"plan",
+    args:[part.salt,stringToHex("COPPER",{size:32}),part.quantityMilli,600,deadline,part.threshold,true]}));
+  const ids = await read("list",[buyer.account.address,1n,10n]);
+  const statuses = async()=>Promise.all(ids.map(async id=>(await read("order",[id])).status));
+  await worker(); await worker(); await worker();
+  assert.deepEqual(await statuses(),[3,3,1]);
+  assert.equal(await read("free",[buyer.account.address]),parseEther(".06"));
+  await client.request({method:"evm_setNextBlockTimestamp",params:[Number(deadline)-20]});
+  await client.request({method:"evm_mine",params:[]});
+  await worker(); await worker();
+  assert.deepEqual(await statuses(),[3,3,3]);
+  assert.equal(await read("free",[buyer.account.address]),0n);
+  assert.equal((await read("list",[buyer.account.address,0n,20n])).length,4);
+  console.log("The real worker bought 0.02 lb on the 70% signal, waited on the same signal, and settled the last 0.01 lb at cutoff.");
   console.log(
     "Buyer-funded fractional purchase, worker restart, supplier payout and per-order receipts passed on Anvil.",
   );

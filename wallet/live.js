@@ -17,6 +17,7 @@ import { baseQuote, chooseOffer, requiredFee, verifiedBook, forwardingFee } from
 import { destinationReceipt } from "../lib/bridge-receipt.js";
 import { routeAbi } from "../lib/routed-abi.js";
 import { liveAbi } from "../lib/live-abi.js";
+import { relatedSalt, purchaseFamilies, sizedPurchases, stockUpQuote } from "../lib/purchase-sizing.js";
 import { liveDecision } from "../lib/live-decision.js";
 import { currentQuote, defaultThreshold, midpointPercent, totalCents } from "../public/decision.js";
 import {
@@ -63,7 +64,7 @@ let address,
   draft,
   funds,
   working = false,
-  loading = false,
+  ongoingRefresh,
   previewInitialized = false,
   draftCost = 0n;
 let liveAssets = [],
@@ -77,6 +78,19 @@ function planReceipt(id) {
     : "";
 }
 const orders = new Map();
+const proposals = new Map();
+let displayedProposal;
+let depositEdited = false;
+function portionsFor(line) {
+  const form = $("approve").elements;
+  const trigger = form.threshold.validity.valid ? form.threshold.valueAsNumber : defaultThreshold;
+  return sizedPurchases(line,buyer,trigger,form.flexible.checked,offerFor);
+}
+function purchaseCalls(line, portion, cutoff, recorded) {
+  const {salt,quantityMilli,threshold,offer}=portion;
+  const plan=call("plan",[salt,stringToHex(line.series,{size:32}),quantityMilli,line.cap,BigInt(cutoff),threshold,recorded]);
+  return offer.feeMicros ? [plan,call("selectBase",[salt,offer.price,BigInt(offer.feeMicros)])] : [plan];
+}
 const statusLabels = ["", "Watching", "Funds held", "Purchased", "Refunded", "Cancelled", "Payment in transit"];
 const filter = { material: "", status: "" };
 let budgetEdited = false;
@@ -251,10 +265,14 @@ function updateApproval() {
     say("Your draft is saved. Add funds to authorize it.");
   } else if (valid) {
     say(reconnect ? "First, reconnect your passkey." :
-      "I’ll watch for a buying opportunity within your limits.");
+      f.elements.flexible.checked ? "When your order can be split, I’ll buy in portions as the forecast strengthens. I’ll ask before buying extra." : "I’ll watch for a buying opportunity within your limits.");
   }
 }
-$("approve").addEventListener("input", updateApproval);
+$("approve").addEventListener("input", e => {
+  if (e.target.name === "deposit") depositEdited = true;
+  if (["flexible","threshold"].includes(e.target.name)) showDraft();
+  else updateApproval();
+});
 $("approve").addEventListener("invalid", e => {
   if ($("orderTerms").contains(e.target)) $("orderTerms").open = true;
 }, true);
@@ -299,34 +317,39 @@ function showDraft() {
   $("quoteSource").hidden = !routed;
   if (routed) $("quoteSource").textContent = book && fee ? "Comparing delivered offers from the project’s Arc and Base Sepolia test suppliers. Forwarding is included." : "Showing the Arc offer while the Base supplier or forwarding quote is unavailable.";
   let cost = 0n;
+  const openPlans = new Set([...$("lines").querySelectorAll("details[open]")].map(el => el.dataset.plan));
   $("lines").innerHTML = draft.lines
     .map((line) => {
-      const offer = offerFor(line);
-      const cents = offer.cents;
+      const portions = portionsFor(line);
+      const cents = portions.reduce((sum,p)=>sum+p.offer.cents,0);
       cost += BigInt(cents) * 10n ** 16n;
+      const networks = [...new Set(portions.map(p=>p.offer.network))].join(" + ");
+      const fees = portions.reduce((sum,p)=>sum+(p.offer.feeMicros || 0),0);
       const alternative = routed && baseQuote(line,book,fee,Math.floor(Date.now()/1000));
-      const comparison = alternative ? '<details><summary>Compare supplier prices</summary><p>Arc ' + usd(totalCents(line.quantity,line.price)) +
+      const comparison = alternative ? '<details data-plan="'+escape(line.salt)+'-compare"><summary>Compare one shipment</summary><p>Arc ' + usd(totalCents(line.quantity,line.price)) +
         ' · Base Sepolia ' + usd(alternative.cents) + ' including forwarding' +
         (alternative.price>line.cap ? ' (above your price cap)' : '') + '</p></details>' : '';
+      const sizing = portions.length>1 ? '<details class="portion-plan" data-plan="'+escape(line.salt)+'-sizing"><summary>Up to '+escape(line.quantity+" "+line.unit)+' in '+portions.length+
+        ' purchases</summary>'+portions.map(p=>'<p>'+escape(p.quantity+" "+line.unit)+' at '+p.threshold+'% or higher · '+usd(p.offer.cents)+
+        (routed?' · '+p.offer.network:'')+'</p>').join("")+'<p>Near the cutoff, any remaining portions can be bought within your price and spending limits.</p></details>' : '<p class="hint">One purchase at this quantity and price cap.</p>';
       return '<li><div class="review-item"><strong>' + escape(line.name) + '</strong><b>' + usd(cents) +
         '</b></div><div class="review-item-meta"><span>' + escape(line.quantity + " " + line.unit) +
-        '</span>' + (routed ? '<span>' + offer.network + (offer.feeMicros ? ' · up to ' + (offer.feeMicros/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + comparison + '</li>';
+        '</span>' + (routed ? '<span>' + networks + (fees ? ' · up to ' + (fees/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + sizing + comparison + '</li>';
     })
     .join("");
+  for (const plan of $("lines").querySelectorAll("details")) plan.open = openPlans.has(plan.dataset.plan);
   draftCost = cost;
   $("priceCaps").innerHTML = draft.lines.map(line =>
     '<p>Maximum price for ' + escape(line.name) + ' <strong>' + usd(line.cap) + ' / ' + escape(line.unit) + '</strong></p>'
   ).join("");
   if (!previewInitialized) {
     $("approve").elements.limit.value = draft.allowance;
-    $("approve").elements.deposit.value = formatEther(
-      cost > funds.free ? cost - funds.free : 0n,
-    );
     previewInitialized = true;
   }
+  if (!depositEdited) $("approve").elements.deposit.value = formatEther(cost > funds.free ? cost - funds.free : 0n);
   updateApproval();
 }
-async function orderCard(id, o) {
+async function orderCard(id, o, family, records) {
   const series = hexToString(o.series, { size: 32 });
   const live = liveAssets.find((a) => a.series === series);
   const archived = catalog.find((a) => a.series === series);
@@ -391,6 +414,19 @@ async function orderCard(id, o) {
       id +
       '">Cancel need</button>';
   }
+  let sizing = "";
+  if (family?.extra === id) sizing = "Buyer-approved extra stock";
+  else if (family?.portions.length > 1) {
+    const total = family.portions.reduce((sum, key) => sum + records.get(key).quantityMilli, 0) / 1000;
+    sizing = "Portion " + (family.portions.indexOf(id) + 1) + " of " + family.portions.length +
+      " · " + total + " " + (asset?.unit || "units") + " approved in total";
+  }
+  orders.get(id).sizing = sizing;
+  if (sizing) body = '<p class="hint">' + escape(sizing) + '</p>' + body;
+  const proposal=proposals.get(id);
+  if (proposal) body += '<div class="stock-suggestion"><strong>Sparrow suggests stocking up</strong><p>'+
+    proposal.probability+'% chance of '+escape(asset.name)+' reaching $'+proposal.strike+' or higher. Add '+escape(proposal.line.quantity+" "+asset.unit)+
+    ' for about '+usd(proposal.offer.cents)+'?</p><button data-stock="'+id+'">Review extra stock</button></div>';
   body +=
     '<div class="market-updates"><button class="bird order-bird' + (assessment?.kind === "Buy" ? ' ready-dance' : '') + '" data-chat="' +
     id +
@@ -419,93 +455,105 @@ async function orderCard(id, o) {
     "</article>"
   );
 }
-async function refresh() {
-  if (loading) return;
-  loading = true;
-  try {
-    const head = await client.getBlock({ blockTag: "latest" });
-    const [wallet, free, limit, spent] = await Promise.all([
-      client.getBalance({ address: buyer }),
-      read("free", [buyer]),
-      read("weeklyLimit", [buyer]),
-      read("committed", [buyer, (head.timestamp + 259200n) / 604800n]),
-    ]);
-    funds = { wallet, free, limit, spent };
-    if ($("notice").textContent.trim() === "Reading your escrow on Arc…") notice("");
-    $("balances").textContent =
-      "Wallet " +
-      amount(wallet) +
-      " · In escrow " +
-      amount(free) +
-      " · Committed this week " +
-      amount(spent) +
-      " / " +
-      amount(limit) +
-      " test USDC";
-    const {limit: capField, deposit: depositField} = $("fund").elements;
-    if (!budgetEdited) capField.value = formatEther(limit);
-    const walletCents = wallet / (10n ** 16n);
-    syncAmountSlider($("capRange"), capField, Math.max(10, 2 * Number(formatEther(limit)), Number(capField.value), Number(formatEther(wallet + free))));
-    syncAmountSlider($("depositRange"), depositField, Number(walletCents > 0n ? walletCents - 1n : 0n) / 100);
-    if (routed && !draft?.lines?.length && Date.now() - feeTime > 60000) await updateFee();
-    showDraft();
-    if (Date.now() - quoteTime > 60000) {
-      quoteTime = Date.now();
-      try {
-        const r = await fetch("/api/market", {
-          signal: AbortSignal.timeout(6000),
-        });
-        liveAssets = r.ok ? (await r.json()).assets : [];
-      } catch {
-        liveAssets = [];
-      }
+function refresh() {
+  ongoingRefresh ??= readWorkspace().finally(() => { ongoingRefresh = undefined; });
+  return ongoingRefresh;
+}
+async function readWorkspace() {
+  const head = await client.getBlock({ blockTag: "latest" });
+  const [wallet, free, limit, spent] = await Promise.all([
+    client.getBalance({ address: buyer }),
+    read("free", [buyer]),
+    read("weeklyLimit", [buyer]),
+    read("committed", [buyer, (head.timestamp + 259200n) / 604800n]),
+  ]);
+  funds = { wallet, free, limit, spent };
+  if ($("notice").textContent.trim() === "Reading your escrow on Arc…") notice("");
+  $("balances").textContent =
+    "Wallet " +
+    amount(wallet) +
+    " · In escrow " +
+    amount(free) +
+    " · Committed this week " +
+    amount(spent) +
+    " / " +
+    amount(limit) +
+    " test USDC";
+  const {limit: capField, deposit: depositField} = $("fund").elements;
+  if (!budgetEdited) capField.value = formatEther(limit);
+  const walletCents = wallet / (10n ** 16n);
+  syncAmountSlider($("capRange"), capField, Math.max(10, 2 * Number(formatEther(limit)), Number(capField.value), Number(formatEther(wallet + free))));
+  syncAmountSlider($("depositRange"), depositField, Number(walletCents > 0n ? walletCents - 1n : 0n) / 100);
+  if (routed && !draft?.lines?.length && Date.now() - feeTime > 60000) await updateFee();
+  showDraft();
+  if (Date.now() - quoteTime > 60000) {
+    quoteTime = Date.now();
+    try {
+      const r = await fetch("/api/market", {
+        signal: AbortSignal.timeout(6000),
+      });
+      liveAssets = r.ok ? (await r.json()).assets : [];
+    } catch {
+      liveAssets = [];
     }
-    const ids = [];
-    for (;;) {
-      const batch = await read("list", [buyer, BigInt(ids.length), 50n]);
-      ids.push(...batch);
-      if (batch.length < 50) break;
-    }
-    const cards = await Promise.all(
-      ids.reverse().map(async (id) => orderCard(id, await read("order", [id]))),
-    );
-    const markup = cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
-    if (markup !== lastOrderMarkup) {
-      const list = $("orderList");
-      const open = new Set([...list.querySelectorAll("details[open]")].map(d => d.dataset.owner + d.dataset.disclosure));
-      const focus = document.activeElement;
-      const parent = focus?.closest("[data-disclosure]");
-      list.innerHTML = markup;
-      lastOrderMarkup = markup;
-      for (const d of list.querySelectorAll("details")) {
-        d.open = open.has(d.dataset.owner + d.dataset.disclosure);
-        if (focus?.tagName === "SUMMARY" && parent?.dataset.owner === d.dataset.owner && parent.dataset.disclosure === d.dataset.disclosure)
-          d.querySelector("summary").focus({preventScroll:true});
-      }
-    }
-    filterOrders();
-    $("events").innerHTML =
-      ids
-        .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
-        .map(id => {
-          const { o, asset, mintLink, status } = orders.get(id);
-          const series = hexToString(o.series, {size: 32});
-          const links = [mintLink, planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
-          return '<div class="receipt-line">' + (o.status === 3 || mintLink ? purchaseMark(series) : "") +
-            '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + escape(o.status === 6 ? status : statusLabels[o.status]) +
-            (links ? "<br>" + links : "") + "</div></div>";
-        })
-        .join("") ||
-      "<p>Receipts appear here when the agent places an order on Arc.</p>";
-  } finally {
-    loading = false;
   }
+  const ids = [];
+  for (;;) {
+    const batch = await read("list", [buyer, BigInt(ids.length), 50n]);
+    ids.push(...batch);
+    if (batch.length < 50) break;
+  }
+  const records=new Map(await Promise.all(ids.map(async id=>[id,await read("order",[id])])));
+  const families=purchaseFamilies(ids,buyer);
+  const now=Date.now();
+  const reservedCents=[...records.values()].filter(o=>o.status===1 && Number(o.orderBy)*1000>=now)
+    .reduce((sum,o)=>sum+totalCents(o.quantityMilli/1000,o.capCents),0);
+  const weeklyRoom=Number((funds.limit-funds.spent)/10n**16n)-reservedCents;
+  proposals.clear();
+  for (const [id,o] of records) {
+    const family=families.get(id);
+    if (family && (family.root!==id || family.extra)) continue;
+    const series=hexToString(o.series,{size:32});
+    const live=liveAssets.find(a=>a.series===series);
+    const familyOrders=(family?.portions || [id]).map(key=>records.get(key));
+    const proposal=stockUpQuote(familyOrders,catalog.find(a=>a.series===series)||live,live?.market,now,offerFor,weeklyRoom);
+    if (proposal) proposals.set(id,{...proposal,root:id,escrowRoom:Number(funds.free/10n**16n)-reservedCents});
+  }
+  const cards = await Promise.all(ids.reverse().map(id=>orderCard(id,records.get(id),families.get(id),records)));
+  const markup = cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
+  if (markup !== lastOrderMarkup) {
+    const list = $("orderList");
+    const open = new Set([...list.querySelectorAll("details[open]")].map(d => d.dataset.owner + d.dataset.disclosure));
+    const focus = document.activeElement;
+    const parent = focus?.closest("[data-disclosure]");
+    list.innerHTML = markup;
+    lastOrderMarkup = markup;
+    for (const d of list.querySelectorAll("details")) {
+      d.open = open.has(d.dataset.owner + d.dataset.disclosure);
+      if (focus?.tagName === "SUMMARY" && parent?.dataset.owner === d.dataset.owner && parent.dataset.disclosure === d.dataset.disclosure)
+        d.querySelector("summary").focus({preventScroll:true});
+    }
+  }
+  filterOrders();
+  $("events").innerHTML =
+    ids
+      .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
+      .map(id => {
+        const { o, asset, mintLink, status } = orders.get(id);
+        const series = hexToString(o.series, {size: 32});
+        const links = [mintLink, planReceipt(id), receipts.get(id + "Held"), receipts.get(id + "Settled")].filter(Boolean).join(" · ");
+        return '<div class="receipt-line">' + (o.status === 3 || mintLink ? purchaseMark(series) : "") +
+          '<div><strong>' + escape(asset?.name || series) + '</strong> · ' + escape(o.status === 6 ? status : statusLabels[o.status]) +
+          (links ? "<br>" + links : "") + "</div></div>";
+      })
+      .join("") ||
+    "<p>Receipts appear here when the agent places an order on Arc.</p>";
 }
 async function confirmed(receipt, type) {
   if (
     receipt.success &&
     receipt.receipt.status === "success" &&
-    type === "plan"
+    (type === "plan" || type === "stock")
   ) {
     const events = parseEventLogs({
       abi,
@@ -522,8 +570,7 @@ async function confirmed(receipt, type) {
           receipt.receipt.transactionHash,
         );
     }
-    localStorage.removeItem(draftKey);
-    draft = null;
+    if (type === "plan") { localStorage.removeItem(draftKey); draft = null; }
   }
   localStorage.removeItem(opKey());
   if (!receipt.success || receipt.receipt.status !== "success")
@@ -624,28 +671,17 @@ $("approve").onsubmit = async (e) => {
       "This delivery date is too soon. Discard this draft and choose a later date.",
     );
   if (routed && Date.now()-feeTime > 90000) {
-    const before = draft.lines.map(offerFor);
+    const before = draft.lines.map(portionsFor);
     await updateFee();
-    if (JSON.stringify(before)!==JSON.stringify(draft.lines.map(offerFor))) {
+    if (JSON.stringify(before)!==JSON.stringify(draft.lines.map(portionsFor))) {
       showDraft(); return notice("Supplier pricing changed. Review the updated offer before authorizing.");
     }
   }
   const now = Math.floor(Date.now() / 1000);
   const calls = [
     terms(f),
-    ...draft.lines.flatMap((l) => {
-      const offer = offerFor(l);
-      const plan = call("plan", [
-        l.salt,
-        stringToHex(l.series, { size: 32 }),
-        Math.round(l.quantity * 1000),
-        l.cap,
-        BigInt(signedCutoff(l, f.elements.shortWindow.checked, now)),
-        Number(f.elements.threshold.value),
-        f.elements.recording.checked,
-      ]);
-      return offer.feeMicros ? [plan,call("selectBase",[l.salt,offer.price,BigInt(offer.feeMicros)])] : [plan];
-    }),
+    ...draft.lines.flatMap(l => portionsFor(l).flatMap(p =>
+      purchaseCalls(l,p,signedCutoff(l,f.elements.shortWindow.checked,now),f.elements.recording.checked))),
   ];
   transact("plan", calls);
 };
@@ -670,6 +706,11 @@ $("withdraw").onclick = () => {
 };
 $("orderList").onclick = (e) => {
   const b = e.target.closest("button");
+  if (b?.dataset.stock) {
+    const proposal=proposals.get(b.dataset.stock);
+    if (proposal) openStockProposal(proposal);
+    return;
+  }
   if (b?.dataset.change) {
     editingId = b.dataset.change;
     $("thresholdForm").elements.value.value = b.dataset.value;
@@ -677,7 +718,7 @@ $("orderList").onclick = (e) => {
     $("editThreshold").showModal();
   }
   if (b?.dataset.chat) {
-    const { o, asset, assessment, live, recording } = orders.get(b.dataset.chat);
+    const { o, asset, assessment, live, recording, sizing } = orders.get(b.dataset.chat);
     const series = hexToString(o.series, { size: 32 });
     const name = asset?.name || series;
     const market = assessment?.recorded ? recording : live;
@@ -696,7 +737,7 @@ $("orderList").onclick = (e) => {
     const facts = {
       quote, impact,
       deadline: "The order cutoff is " + date(o.orderBy) + ".",
-      terms: "Your early-order threshold is " + o.threshold + "% and your maximum unit price is " + usd(o.capCents) + ".",
+      terms: "Your early-order threshold is " + o.threshold + "% and your maximum unit price is " + usd(o.capCents) + "." + (sizing ? " " + sizing + "." : ""),
     };
     sessionStorage.setItem(
       "forestock.arcTalk",
@@ -705,6 +746,7 @@ $("orderList").onclick = (e) => {
         facts,
         context: "Arc Testnet, passkey-authorized order for " + o.quantityMilli / 1000 + " " +
           (asset?.unit || "units") + " of " + name + ". Onchain status: " + status + ". " +
+          (sizing ? sizing + ". " : "") + "Any extra stock needs a separate passkey approval. " +
           (assessment?.reason || "") + (o.allowRecording ? " Dated forecasts are allowed." : " Only live forecasts are allowed.") +
           " While watching, the agent checks for an eligible forecast. At cutoff it can reserve funds without a forecast if supplier and spending limits still allow it. The test supplier receives payment only after a confirmed hold and settlement.",
         draft: {
@@ -718,6 +760,45 @@ $("orderList").onclick = (e) => {
   }
   if (b?.dataset.cancel && confirm("Cancel this authorized need on Arc?"))
     transact("cancel", [call("cancel", [b.dataset.cancel])]);
+};
+function openStockProposal(proposal) {
+  displayedProposal=proposal;
+  const {line,offer}=proposal;
+  $("stockReason").textContent="The live forecast puts the chance of "+line.name+" reaching $"+proposal.strike+
+    " or higher at "+proposal.probability+"% by "+date(Date.parse(proposal.expiry)/1000)+".";
+  $("stockTerms").textContent="Approve an extra "+line.quantity+" "+line.unit+" from "+offer.network+" at an estimated "+usd(offer.cents)+
+    ". Maximum "+usd(line.cap)+"/"+line.unit+". Sparrow may buy at "+proposal.threshold+"% or in the final ordering window before "+date(line.orderBy)+".";
+  const short=Math.max(0,offer.cents-proposal.escrowRoom);
+  $("stockFunding").textContent=short ? "Add "+usd(short)+" to escrow to cover this extra and your open needs. Your weekly limit is "+amount(funds.limit)+" test USDC."
+    : "Your current escrow and weekly limit cover this extra. A passkey approval creates the additional order.";
+  $("approveStock").textContent=short ? "Open budget" : "Approve extra with passkey";
+  if (!$("stockDialog").open) $("stockDialog").showModal();
+}
+$("dismissStock").onclick=()=>$("stockDialog").close();
+$("approveStock").onclick=async () => {
+  const previous=displayedProposal;
+  if (!previous || working) return;
+  if (previous.escrowRoom<previous.offer.cents) { $("stockDialog").close(); showView("budget"); return; }
+  const button=$("approveStock");
+  button.disabled=true;
+  try {
+    await refresh();
+    const proposal=proposals.get(previous.root);
+    if (!proposal) {
+      $("stockDialog").close(); return notice("This stock-up opportunity is no longer available.");
+    }
+    if (proposal.offer.cents!==previous.offer.cents || proposal.offer.network!==previous.offer.network ||
+        proposal.offer.price!==previous.offer.price || proposal.offer.feeMicros!==previous.offer.feeMicros ||
+        proposal.probability!==previous.probability || proposal.strike!==previous.strike || proposal.expiry!==previous.expiry ||
+        proposal.threshold!==previous.threshold || proposal.escrowRoom<proposal.offer.cents) {
+      openStockProposal(proposal); $("stockReason").prepend("The terms changed. "); return;
+    }
+    $("stockDialog").close();
+    const salt=relatedSalt(proposal.root,"extra");
+    await transact("stock",purchaseCalls(proposal.line,{salt,quantityMilli:Math.round(proposal.line.quantity*1000),
+      threshold:proposal.threshold,offer:proposal.offer},proposal.line.orderBy,false));
+  } catch { notice("Couldn’t verify the stock-up terms. Try again."); }
+  finally {button.disabled=false;}
 };
 function preview() {
   const { o, asset, live, recording } = orders.get(editingId);

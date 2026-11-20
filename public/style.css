@@ -575,6 +575,11 @@ select {
 #review #guide { margin-bottom: 18px; }
 #lines { padding: 0; margin: 0; list-style: none; }
 #lines li { padding: 14px 0; border-top: 1px solid #dfd0bb; }
+.portion-plan { margin-top: 8px; font-size: .9rem; }
+.portion-plan summary { cursor: pointer; color: #784122; }
+.portion-plan p { margin: 6px 0; }
+.stock-suggestion { border-left: 2px solid #b76532; padding-left: 14px; margin-block: 20px; }
+.stock-suggestion p { margin: 4px 0 8px; }
 .review-item, .review-item-meta, .review-deposit { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
 .review-item { font-size: 1.15rem; }
 .review-item b { font-weight: 600; }

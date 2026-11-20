@@ -5,6 +5,7 @@ import {
   parseEther,
   toHex,
 } from "viem";
+import { orderId, relatedSalt } from "../../lib/purchase-sizing.js";
 import { routeAbi } from "../../lib/routed-abi.js";
 import { liveAbi } from "../../lib/live-abi.js";
 import fs from "node:fs";
@@ -149,6 +150,9 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   const order = decodeFunctionData({ abi, data: calls[1].data });
   expect(order.functionName).toBe("plan");
   expect(order.args.at(-1)).toBe(false);
+  const portions = calls.slice(1).map(c=>decodeFunctionData({abi,data:c.data}).args);
+  expect(portions.map(p=>p[2])).toEqual([3,3,4]);
+  expect(portions.map(p=>p[5])).toEqual([10,40,70]);
   expect(order.args[5]).toBe(10);
   const seconds = Number(order.args[4]) - Date.now()/1000;
   expect(seconds).toBeGreaterThan(105);
@@ -319,6 +323,8 @@ test("cross-chain review signs the cheaper delivered offer and the fee cap in on
   await enterSavedOrders(page);
   await page.getByRole("link",{name:"Compare Arc and Base suppliers"}).click();
   await expect(page.locator("#lines")).toContainText("Base Sepolia");
+  await page.locator("#orderTerms summary").click();
+  await page.getByLabel("Let Sparrow buy in portions").uncheck();
   await expect(page.locator("#depositSummary")).toHaveText("0.52 test USDC");
   await page.getByRole("button",{name:"Authorize with passkey"}).click();
   await expect.poll(()=>page.evaluate(()=>Boolean(window.sent))).toBe(true);
@@ -412,4 +418,54 @@ test("typed planning can finish missing details and open live review without sug
   await expect(page.locator("#lines li").nth(1)).toContainText("Oil (Brent)");
   await expect(page.locator("#approve [name=limit]")).toHaveValue("2");
   expect(requests).toBe(1);
+});
+
+test("stock-up suggestions require a separate passkey and cannot compound", async ({page}) => {
+  const buyer = "0x" + "12".repeat(20);
+  const root = "0x" + "42".repeat(32);
+  const salt = relatedSalt(root,"extra");
+  const extra = orderId(buyer,salt);
+  const now = Date.now();
+  const orderBy = BigInt(Math.floor(now/1000) + 86400);
+  const copper = JSON.parse(fs.readFileSync("public/commodities.json")).assets.find(a => a.series === "COPPER");
+  const market = {series:"COPPER", observed:new Date(now).toISOString(), expiry:new Date(now+3600000).toISOString(),
+    contracts:[{strike:5.7,bid:.78,ask:.80}]};
+  await page.addInitScript(b => localStorage.setItem("forestock.arcWallet", b), buyer);
+  await page.route("**/api/market", r => r.fulfill({json:{assets:[{...copper,market}]}}));
+  await page.route("**/generated/wallet-config.json", r => r.fulfill({json:{clientKey:"test-client"}}));
+  const submissions = [];
+  await page.exposeFunction("recordExtra", data => submissions.push(data));
+  await page.route("**/generated/circle.js", r => r.fulfill({contentType:"application/javascript",body:`
+    export const hasWalletCredential = () => true;
+    export function connectWallet() {}
+    export function waitEscrowOperation() {}
+    export async function sendEscrowCalls(key,buyer,calls,submitted) {
+      await window.recordExtra(calls.map(c=>c.data));
+      submitted("0x"+"cd".repeat(32));
+      return {success:true,receipt:{status:"success",transactionHash:"0x"+"ab".repeat(32)}};
+    }`}));
+  await mockArc(page,()=>"1",{
+    free:parseEther("2"), weeklyLimit:parseEther("2"),
+    list:()=>submissions.length ? [root,extra] : [root],
+    order:id=>({buyer,series:toHex("COPPER",{size:32}),quantityMilli:id===extra ? 25 : 100,
+      capCents:id===extra ? copper.price : 601,orderBy,threshold:id===extra ? 70 : 10,
+      allowRecording:false,status:1,holdTime:0n,holdBlock:0n,settlementBlock:0n,amount:0n}),
+  });
+  await enterSavedOrders(page);
+  const review = page.getByRole("button",{name:"Review extra stock"});
+  await review.click();
+  const dialog = page.getByRole("dialog",{name:"Review extra stock"});
+  await expect(dialog).toContainText("79%");
+  await expect(dialog).toContainText("0.025 lb");
+  await dialog.getByRole("button",{name:"Not now"}).click();
+  expect(submissions).toHaveLength(0);
+  await review.click();
+  await dialog.getByRole("button",{name:"Approve extra with passkey"}).click();
+  await expect(page.getByText("Buyer-approved extra stock")).toBeVisible();
+  await expect(review).toHaveCount(0);
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0]).toHaveLength(1);
+  expect(decodeFunctionData({abi,data:submissions[0][0]})).toMatchObject({
+    functionName:"plan",args:[salt,toHex("COPPER",{size:32}),25,copper.price,orderBy,70,false],
+  });
 });
