@@ -27,12 +27,23 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     return selected() && draft.quantity !== null && draft.allowance !== null;
   }
 
-  function summary() {
-    return draft.quantity + " " + selected().unit + " of " + selected().name +
-      " · " + draft.allowance.toLocaleString("en-US") + " test USDC per week";
+  function printLine(id, value) {
+    const line = document.getElementById(id);
+    if (line.textContent === value) return;
+    line.textContent = value;
+    if (line.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      line.animate([{ opacity: .2, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
+        { duration: 260, easing: "ease-out" });
+    }
   }
 
   function refreshSuggestions() {
+    const asset = selected();
+    printLine("receiptNeed", asset
+      ? (draft.quantity === null ? asset.name : draft.quantity + " " + asset.unit + " of " + asset.name)
+      : "Material pending");
+    printLine("receiptLimit", draft.allowance === null
+      ? "Weekly allowance pending" : draft.allowance.toLocaleString("en-US") + " test USDC per week");
     suggestions.replaceChildren();
     function offer(label, action) {
       const button = document.createElement("button");
@@ -43,10 +54,6 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     }
     if (pending) return;
     if (ready()) {
-      const terms = document.createElement("p");
-      terms.className = "draft-terms";
-      terms.textContent = summary();
-      suggestions.append(terms);
       offer("Review order", () => finish(selected(), draft.quantity, draft.allowance));
     } else if (!selected()) {
       for (const a of choices()) offer(a.name, () => pick(a.name, { series: a.series }));

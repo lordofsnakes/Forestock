@@ -24,35 +24,46 @@
       <button id="openWallet" hidden type="button">Set up wallet</button>
     </header>
     <section id="walletIntro" aria-labelledby="walletHeading">
-      <div class="chat-heading">
-        <button class="bird portrait" aria-label="Animate the wallet sparrow"><span></span></button>
-        <div><h1 id="walletHeading">Your purchasing wallet</h1><p>Arc Testnet</p></div>
-      </div>
+      <h1 id="walletHeading">Your purchasing desk</h1>
+      <p class="intro-copy">Use a passkey to set up your account with your face, fingerprint, or device lock.</p>
       <div id="walletControls">
-        <p role="status">Loading wallet setup…</p>
-        <output aria-label="Wallet address" hidden></output>
-        <div class="actions" hidden>
-          <button data-register class="primary">Create passkey wallet</button>
-          <button data-login>Use existing passkey</button>
+        <div class="account-actions">
+          <div class="perch">
+            <span class="bird perch-bird" aria-hidden="true"><span></span></span>
+            <button data-register class="primary" disabled>Create a passkey</button>
+            <button id="continueSetup" class="primary" hidden>Continue to order planning</button>
+          </div>
+          <button id="manualSetup" aria-expanded="false" aria-controls="manualOptions">Manual setup</button>
         </div>
+        <div id="manualOptions" hidden>
+          <button data-login disabled>Use existing passkey</button>
+          <button data-demo>Continue with demo balance</button>
+        </div>
+        <p role="status">Preparing passkey setup…</p>
+        <output aria-label="Wallet address" hidden></output>
         <button data-retry hidden>Retry wallet setup</button>
-        <p class="hint">Practice orders use a separate demo balance.</p>
       </div>
-      <button id="continueSetup" type="button">Continue with demo balance</button>
     </section>
     <section hidden id="welcome" aria-labelledby="welcomeTitle">
       <div class="chat-heading">
         <button class="bird portrait" aria-label="Animate the copper-winged sparrow"><span></span></button>
-        <div><h1 id="welcomeTitle">Plan an order</h1><p>With your AI purchasing helper</p></div>
+        <div><h1 id="welcomeTitle">Plan an order</h1><p>With your purchasing helper</p></div>
       </div>
-      <div id="messages" role="log" aria-label="Setup conversation" aria-live="polite"></div>
-      <div class="reply-area">
-        <div id="suggestions" aria-label="Suggested replies"></div>
-        <form id="setup" autocomplete="off">
-          <input name="reply" aria-label="Your message" maxlength="1000" required />
-          <button class="primary">Send</button>
-        </form>
-        <button id="restart" type="button" hidden>Start over</button>
+      <div class="receipt">
+        <div class="receipt-head"><strong>Purchase request</strong><span>Draft</span></div>
+        <div class="draft-terms" aria-live="polite">
+          <span id="receiptNeed">Material pending</span>
+          <span id="receiptLimit">Weekly allowance pending</span>
+        </div>
+        <div id="messages" role="log" aria-label="Setup conversation" aria-live="polite"></div>
+        <div class="reply-area">
+          <div id="suggestions" aria-label="Suggested replies"></div>
+          <form id="setup" autocomplete="off">
+            <input name="reply" aria-label="Your message" maxlength="1000" required />
+            <button class="primary">Send</button>
+          </form>
+          <button id="restart" type="button" hidden>Start over</button>
+        </div>
       </div>
     </section>
     <main hidden id="app" aria-live="polite">Loading orders…</main>

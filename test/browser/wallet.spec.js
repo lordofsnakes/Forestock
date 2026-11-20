@@ -33,9 +33,9 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
     return route.fulfill({ json: { id, jsonrpc: "2.0", result } });
   });
   await page.goto("http://localhost:3271/");
-  await expect(page.getByRole("heading", { name: "Your purchasing wallet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your purchasing desk" })).toBeVisible();
   await expect(page.locator("#welcome")).toBeHidden();
-  await page.getByRole("button", { name: "Create passkey wallet" }).click();
+  await page.getByRole("button", { name: "Create a passkey" }).click();
   await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   await page.reload();
   await expect(page.locator("#walletIntro output")).toHaveText(address);
@@ -46,6 +46,7 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.evaluate(() => localStorage.removeItem("forestock.arcWallet"));
   await page.reload();
+  await page.getByRole("button", { name: "Manual setup" }).click();
   await page.getByRole("button", { name: "Use existing passkey" }).click();
   await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   expect(methods).toEqual(["rp_getRegistrationOptions","rp_getRegistrationVerification","circle_getAddress",

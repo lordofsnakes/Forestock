@@ -1,3 +1,4 @@
+import { flyToScreen } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
 import { day, week, refresh, evaluate } from "./decision.js";
 const el = document.querySelector("#app"),
@@ -61,6 +62,9 @@ let addingNeed = false;
 const welcome = document.querySelector("#welcome");
 let inSetup = true;
 function finishSetup(asset, quantity, allowance) {
+  flyToScreen(welcome, el, ".order-bird", () => openOrder(asset, quantity, allowance), welcome.querySelector(".draft-terms"));
+}
+function openOrder(asset, quantity, allowance) {
   if (order().status === "Watching") {
     if (saved && asset.series !== current().series) {
       const need = { ...initial().order, asset: compact(asset), id: crypto.randomUUID() };
@@ -91,7 +95,6 @@ function finishSetup(asset, quantity, allowance) {
   el.hidden = false;
   document.querySelector("nav").hidden = false;
   render();
-  el.classList.add("step-enter");
   el.querySelector("h1").tabIndex = -1;
   el.querySelector("h1").focus();
 }
