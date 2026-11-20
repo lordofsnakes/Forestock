@@ -376,3 +376,55 @@ test("a commodity above the available demo budget has no suggested purchase quan
   await expect(page.locator("#suggestions")).toContainText("Your demo spending balance is 600.00 USDC");
   await expect(button(page, "1 troy oz")).toHaveCount(0);
 });
+
+test("a partial live response replays the matching copper quote through to a receipt", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const copper = data.assets.find(a => a.series === "COPPER");
+  await page.route("**/api/market", route => route.fulfill({ json: { assets: [{ ...copper, market: null }] } }));
+  await start(page);
+  await expect(page.locator(".order-status")).toContainText("70%");
+  await expect(page.locator(".order-status")).toContainText("Recorded forecast from");
+  await button(page, "Run decision").click();
+  await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
+  await button(page, "Accept order").click();
+  await expect(page.getByRole("heading", { name: "Supplier receipt" })).toBeVisible();
+  await expect(page.locator(".order-status")).toContainText("Used forecast recorded");
+  await button(page, "Activity").click();
+  const buy = page.locator(".log").filter({ has: page.getByRole("heading", { name: "Buy", exact: true }) });
+  await expect(buy).toContainText("Recorded forecast from");
+  await expect(buy).toContainText("Held $5.80");
+});
+
+test("a buyer can switch a waiting live copper order to the dated recording and back", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const copper = structuredClone(data.assets.find(a => a.series === "COPPER"));
+  copper.market.observed = new Date().toISOString();
+  copper.market.expiry = new Date(Date.now() + 3600000).toISOString();
+  copper.market.contracts = [{ strike: 5.7, bid: .40, ask: .44 }];
+  await page.route("**/api/market", route => route.fulfill({ json: { assets: [copper] } }));
+  await start(page);
+  await expect(page.locator(".order-status")).toContainText("42%");
+  await button(page, "Use recorded forecast").click();
+  await expect(page.locator(".order-status")).toContainText("70%");
+  await button(page, "Use live forecast").click();
+  await expect(page.locator(".order-status")).toContainText("42%");
+});
+
+test("bottom tabs slide in the selected direction and rapid switches leave one active page", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page);
+  const main = page.locator("#app");
+  await button(page, "Budget").click();
+  expect(await main.evaluate(el => el.getAnimations().length)).toBe(0);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  // Inspect immediately in the same task, before animation frames are consumed.
+  const moves = await page.evaluate(() => ["Activity", "Budget", "Orders"].map(name => {
+    document.querySelector('[data-tab="' + name + '"]').click();
+    return document.querySelector("#app").getAnimations()[0].effect.getKeyframes()[0].transform;
+  }));
+  expect(moves[0]).toMatch(/^translateX\(\d/);
+  expect(moves.slice(1).every(value => value.startsWith("translateX(-"))).toBe(true);
+  await expect(page.locator(".departing-tab")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Active needs" })).toBeVisible();
+  await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
+});

@@ -4,7 +4,7 @@
 
 ## Try the demo
 
-Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time, then run the decision. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. Try the cutoff scenario to hold funds, then accept or decline the order and inspect Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
+Open Orders, select a listed commodity, then edit its quantity, price cap, notes and arrival time, then run the decision. The copper example offers $5.80/lb delivered with a 24-hour lead time and up to 500 lb. The example starts with $1,000 in demo funds and a $600 weekly limit. For a repeatable forecast-driven purchase, choose **Copper**, **1 lb** and **600 USDC**. In Orders select **Use recorded forecast** if a live quote is showing. The November 19 recording gives a 70% probability, above the 65% threshold. Select **Run decision** and **Accept order** to see the supplier receipt and the $5.80 commitment in Budget and Activity. On iPhone, open Safari’s Share menu and use Add to Home Screen.
 
 The editable public workspace saves to this browser. Its controls simulate settlement. Activity also includes a separately executed Arc testnet purchase with independently verifiable receipts. Phone edits do not authorize the funded testnet signer.
 
@@ -14,7 +14,7 @@ The buyer can select any series discovered in Gemini’s active Commodities cate
 
 The server queries active commodity events from Gemini's public events API. For copper, the linked contract terms specify the KK_RFR_COPPERUSDC index. Broker fees, physical delivery and a $0.12/lb supplier premium are represented by an illustrative delivered quote. Early buying requires a valid order, a two-sided quote with spread at most 10 cents, a snapshot fetched within two minutes and an event resolving by the order cutoff. Use the lowest quoted strike where strike plus premium exceeds today's supplier price. A midpoint of at least 65% triggers an early purchase. The midpoint estimates market expectations. A fetch timestamp measures snapshot age and cannot establish when traders last updated the book.
 
-The preview labels the dated fallback when Gemini is unavailable. The command-line agent never spends against replay data. Both paths enforce unit price, delivery, stock and budget at cutoff.
+The preview falls back to the selected commodity’s recorded snapshot when its live quote is missing, stale or expired. Replay evaluates time to expiry at capture against the time remaining in the buyer’s order window. The command-line agent never spends against replay data. Both paths enforce unit price, delivery, stock and budget at cutoff.
 
 ## Arc testnet and merchant settlement
 

@@ -11,6 +11,10 @@ export function refresh(s, t) {
   }
   return s;
 }
+export function currentQuote(market, time) {
+  return Boolean(market?.contracts?.length &&
+    Math.abs(time - Date.parse(market.observed)) <= 120000 && Date.parse(market.expiry) > time);
+}
 export function evaluate(s, m, t, marketTime = t) {
   const o = s.order,
     price = o.asset?.price ?? 580,
@@ -37,9 +41,8 @@ export function evaluate(s, m, t, marketTime = t) {
     .sort((a, b) => a.strike - b.strike)[0];
   if (
     !c ||
-    Math.abs(marketTime - Date.parse(m.observed)) > 120000 ||
-    Date.parse(m.expiry) <= marketTime ||
-    Date.parse(m.expiry) > cutoff
+    !currentQuote(m, marketTime) ||
+    Date.parse(m.expiry) - marketTime > cutoff - t
   )
     return {
       kind: "Wait",

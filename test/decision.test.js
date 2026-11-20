@@ -83,3 +83,13 @@ test("weekly allowance renews exactly at Monday midnight UTC", () => {
   assert.equal(refresh(state, boundary).used, 0);
   assert.equal(state.balance, 42000);
 });
+
+test("historical expiry fits only if the buyer has enough time left before cutoff", () => {
+  const observed = Date.UTC(2026, 10, 19, 19);
+  const recorded = { ...m, observed: new Date(observed), expiry: new Date(observed + 3 * 3600000) };
+  const today = observed + 7 * day;
+  const state = { ...s, order: { ...s.order, due: today + day + 2 * 3600000 } };
+  assert.equal(evaluate(state, recorded, today, observed).kind, "Wait");
+  state.order.due += 2 * 3600000;
+  assert.equal(evaluate(state, recorded, today, observed).kind, "Buy");
+});

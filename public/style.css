@@ -12,6 +12,7 @@
   box-sizing: border-box;
 }
 body {
+  overflow-x: clip;
   margin: 0;
 }
 header,
@@ -130,7 +131,20 @@ button:disabled {
   color: #fff9ef;
   border-color: #853f20;
 }
+.departing-tab {
+  position: fixed;
+  margin: 0;
+  pointer-events: none;
+}
+.forecast-switch {
+  background: transparent;
+  border: 0;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 nav {
+  z-index: 2;
   position: fixed;
   bottom: 0;
   left: 0;

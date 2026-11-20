@@ -1,6 +1,6 @@
 import { flyToScreen } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
-import { day, week, refresh, evaluate } from "./decision.js";
+import { day, week, refresh, evaluate, currentQuote } from "./decision.js";
 const el = document.querySelector("#app"),
   dialog = document.querySelector("#editor"),
   form = document.querySelector("#orderForm");
@@ -45,9 +45,7 @@ function initial() {
 }
 const saved = JSON.parse(localStorage.getItem(key) || "null");
 let s = saved || initial(),
-  tab = "Orders",
-  market,
-  replay = false;
+  tab = "Orders";
 // Upgrade the original single-need workspace without rebooking its holds.
 if (!s.orders) {
   const id = crypto.randomUUID();
@@ -80,7 +78,6 @@ function openOrder(lines, allowance) {
     if (!reuse) s.orders.push(need);
     if (index === 0) s.selectedId = need.id;
   }
-  syncMarket();
   s.limit = Math.round(allowance * 100);
   inSetup = false;
   record(
@@ -131,8 +128,13 @@ function current() {
 function selected(f) {
   return assets.find((a) => a.series === f.elements.asset.value) || current();
 }
-function syncMarket() {
-  market = assets.find((a) => a.series === current().series)?.market;
+function forecast(t = now()) {
+  const series = current().series;
+  const latest = assets.find(asset => asset.series === series)?.market;
+  const recording = baseline.find(asset => asset.series === series)?.market;
+  const live = currentQuote(latest, t) ? latest : null;
+  const replay = Boolean(recording?.contracts?.length && (order().preferRecording || !live));
+  return { market: replay ? recording : live, replay, canSwitch: Boolean(live && recording?.contracts?.length) };
 }
 function updatePicker(f) {
   const a = selected(f);
@@ -187,13 +189,8 @@ function btn(label, action, primary = false) {
 function chainReceipts() {
   return '<section class="card"><small>VERIFIED ON ARC TESTNET</small><h2>One-pound copper rehearsal</h2><p>Central Metals accepted the simulated order. The vault released 5.80 test USDC after the supplier signed.</p><div class="actions"><a href="https://testnet.arcscan.app/tx/0xafa53f0c08a315097e58bcc6653a4e7e13917e5b5dead0a12a4d08c102e16ae5">View hold ↗</a><a href="https://testnet.arcscan.app/tx/0x9360fef60eaa513b590608280bc53fb81ad1289e49d8c8019c9d0fa430918da1">View payout ↗</a></div><p>A second order was declined. Its 5.80 test USDC returned to the buyer’s available balance.</p><a href="https://testnet.arcscan.app/tx/0x734668b9fc0016ea9ffca774db2855a8894ae5d517d75d9952bccf8f84046c94">View refund ↗</a></section>';
 }
-function assessment(t = now()) {
-  return evaluate(
-    { ...s, order: order() },
-    market,
-    t,
-    replay && market ? Date.parse(market.observed) : now(),
-  );
+function assessment({ market, replay }, t = now()) {
+  return evaluate({ ...s, order: order() }, market, t, replay ? Date.parse(market.observed) : t);
 }
 function needsOverview() {
   const active = s.orders.filter(o => o.status === "Watching" || o.status === "Held");
@@ -223,7 +220,9 @@ function render() {
   for (const b of document.querySelectorAll("[data-tab]"))
     b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
   if (tab === "Orders") {
-    const d = assessment(),
+    const source = forecast();
+    const { market, replay } = source;
+    const d = assessment(source),
       open = o.status === "Watching",
       held = o.status === "Held";
     el.innerHTML =
@@ -245,7 +244,13 @@ function render() {
               ? "The supplier accepted your order."
               : "The supplier declined the order.",
       ) +
-      '</p><p class="hint">Simulated purchase</p><div class="actions">' +
+      '</p><p class="hint">' +
+      (open && replay ? "Simulated purchase · Recorded forecast from " + dt(market.observed)
+        : o.replayObserved && !open ? "Simulated purchase · Used forecast recorded " + dt(o.replayObserved)
+        : "Simulated purchase") + "</p>" +
+      (open && source.canSwitch ? '<button class="forecast-switch" data-action="forecast">' +
+        (replay ? "Use live forecast" : "Use recorded forecast") + "</button>" : "") +
+      '<div class="actions">' +
       (open
         ? btn("Run decision", "run", true) + btn("Edit need", "edit")
         : held
@@ -268,12 +273,12 @@ function render() {
       row("Maximum price",money(o.cap)+" / "+esc(unit)) +
       row("Needed by",dt(o.due)) +
       '</details></section><section class="card"><details><summary>Gemini forecast · ' +
-      (replay ? "Recorded replay" : "Market snapshot") +
+      (replay ? "Recorded replay" : market ? "Market snapshot" : "No quote") +
       "</summary><p>" +
-      esc(market?.title || "Market unavailable") +
+      esc(market?.title || "No qualifying Gemini quote or recording for " + name + " yet.") +
       '</p><p class="hint">' +
       (market
-        ? "Fetched " +
+        ? (replay ? "Recorded " : "Fetched ") +
           dt(market.observed) +
           " · simulated supplier premium " +
           money(premium) +
@@ -340,6 +345,45 @@ function render() {
     if (expanded.has(detail.querySelector("summary")?.textContent))
       detail.open = true;
 }
+const tabs = [...document.querySelectorAll("nav [data-tab]")].map(button => button.dataset.tab);
+let endTabSlide;
+function switchTab(next) {
+  if (tab === next) {
+    window.scrollTo(0, 0);
+    return;
+  }
+  endTabSlide?.();
+  const direction = Math.sign(tabs.indexOf(next) - tabs.indexOf(tab));
+  const animate = el.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let outgoing;
+  if (animate) {
+    const rect = el.getBoundingClientRect();
+    outgoing = document.createElement("main");
+    outgoing.className = "departing-tab";
+    outgoing.inert = true;
+    outgoing.setAttribute("aria-hidden", "true");
+    Object.assign(outgoing.style, { top: rect.top + "px", left: rect.left + "px", width: rect.width + "px" });
+    outgoing.append(...el.children);
+    outgoing.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
+    el.before(outgoing);
+  }
+  tab = next;
+  render();
+  window.scrollTo(0, 0);
+  if (!outgoing) return;
+  const distance = Math.min(el.clientWidth * .28, 180) * direction;
+  const timing = { duration: 270, easing: "cubic-bezier(.2,.75,.25,1)" };
+  const leave = outgoing.animate([{ opacity: 1 }, { transform: `translateX(${-distance}px)`, opacity: 0 }], timing);
+  const enter = el.animate([{ transform: `translateX(${distance}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], timing);
+  endTabSlide = () => {
+    enter.onfinish = null;
+    enter.cancel();
+    leave.cancel();
+    outgoing.remove();
+    endTabSlide = null;
+  };
+  enter.onfinish = endTabSlide;
+}
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -349,7 +393,6 @@ document.addEventListener("click", (e) => {
   }
   if (b.dataset.need) {
     s.selectedId = b.dataset.need;
-    syncMarket();
     fillPickers();
     render();
     el.querySelector(".order-status").scrollIntoView({ block: "start" });
@@ -358,9 +401,7 @@ document.addEventListener("click", (e) => {
   if (!b.dataset.action && !b.dataset.tab && !b.hasAttribute("data-close"))
     return;
   if (b.dataset.tab) {
-    tab = b.dataset.tab;
-    render();
-    window.scrollTo(0, 0);
+    switchTab(b.dataset.tab);
     return;
   }
   if (b.hasAttribute("data-close")) {
@@ -386,6 +427,9 @@ document.addEventListener("click", (e) => {
     dialog.showModal();
     return;
   }
+  if (a === "forecast") {
+    o.preferRecording = !forecast().replay;
+  }
   if (a === "pause") {
     s.paused = !s.paused;
     record(
@@ -400,19 +444,25 @@ document.addEventListener("click", (e) => {
     record("Allowance updated", money(s.limit) + " weekly limit.");
   }
   if ((a === "run" || a === "cutoff") && o.status === "Watching") {
-    const d = assessment(a === "cutoff" ? o.due - day : now());
+    const source = forecast();
+    const d = assessment(source, a === "cutoff" ? o.due - day : now());
+    const recorded = source.replay && d.contract ? source.market.observed : null;
     if (d.kind === "Buy") {
       s.used += o.qty * price;
       s.balance -= o.qty * price;
       o.status = "Held";
       o.commitWeek = s.week;
+      if (recorded) o.replayObserved = recorded;
     }
     record(
       (a === "cutoff" ? "Cutoff scenario · " : "") + d.kind,
-      d.reason +
+      (recorded ? "Recorded forecast from " + dt(recorded) + ". " : "") + d.reason +
         (d.kind === "Buy" ? " Held " + money(o.qty * price) + "." : ""),
     );
-    if (d.kind !== "Buy") tab = "Activity";
+    if (d.kind !== "Buy") {
+      switchTab("Activity");
+      return;
+    }
   }
   if (o.status === "Held" && (a === "accept" || a === "decline")) {
     if (a === "decline") {
@@ -441,7 +491,6 @@ form.addEventListener("submit", (e) => {
   if (addingNeed) s.orders.push(need);
   else s.orders[s.orders.indexOf(order())] = need;
   s.selectedId = need.id;
-  syncMarket();
   record(
     "Material need saved",
     order().qty + " " + current().unit + " of " + current().name + "",
@@ -456,13 +505,10 @@ async function loadMarket() {
     const live = (await r.json()).assets;
     const active = new Set(live.map(asset => asset.series));
     assets = [...live, ...baseline.filter(asset => !active.has(asset.series)).map(compact)];
-    replay = false;
   } catch {
-    assets = baseline;
-    replay = true;
+    assets = baseline.map(compact);
   }
   fillPickers();
-  syncMarket();
   if (tab === "Orders") render();
 }
 render();
