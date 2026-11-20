@@ -10,14 +10,14 @@ import {
   formatEther,
   isAddress,
 } from "viem";
-import { hop, landOnArcReview } from "../public/onboarding-motion.js";
+import { flyToScreen, hop, landOnArcReview } from "../public/onboarding-motion.js";
 import { sparrowSpeech } from "../public/sparrow-speech.js";
 import { arcTestnet } from "viem/chains";
 import { liveAbi as abi } from "../lib/live-abi.js";
 import { liveDecision } from "../lib/live-decision.js";
 import { midpointPercent, totalCents } from "../public/decision.js";
 import {
-  sendEscrowCalls,
+  connectWallet, hasWalletCredential, sendEscrowCalls,
   waitEscrowOperation,
 } from "../public/generated/circle.js";
 
@@ -166,6 +166,8 @@ function updateApproval() {
   const deposit = valid ? parseEther(input.value) : 0n;
   const feeShort = gasShortfall?.balance === funds.wallet && gasShortfall?.deposit === deposit;
   const needsFunds = valid && (funds.wallet <= deposit || feeShort);
+  const reconnect = !hasWalletCredential(buyer);
+  $("authorize").textContent = working ? "Please wait…" : reconnect ? "Reconnect existing passkey" : "Authorize with passkey";
   $("authorize").disabled = !valid || needsFunds || working;
   $("fundingHelp").hidden = !needsFunds;
   $("depositSummary").textContent = valid ? amount(deposit) + " test USDC" : "Choose a deposit";
@@ -177,7 +179,8 @@ function updateApproval() {
         "Leave some test USDC in your wallet for the network fee.");
     say("Your draft is saved. Add test USDC to your wallet, then I can help you authorize this order.");
   } else if (valid) {
-    say("Review your limits, then use your passkey to let me watch for the right time to buy.");
+    say(reconnect ? "Reconnect this wallet once, then you can authorize your order." :
+      "Review your limits, then use your passkey to let me watch for the right time to buy.");
   }
 }
 $("approve").addEventListener("input", updateApproval);
@@ -419,7 +422,6 @@ async function confirmed(receipt, type) {
     }
     localStorage.removeItem(draftKey);
     draft = null;
-    showView(view);
   }
   localStorage.removeItem(opKey());
   if (!receipt.success || receipt.receipt.status !== "success")
@@ -429,6 +431,10 @@ async function confirmed(receipt, type) {
   $("notice").innerHTML =
     "Confirmed on Arc. " +
     link(receipt.receipt.transactionHash, "View your transaction");
+  if (type === "plan" && !$("review").hidden) {
+    const reveal = () => showView(view);
+    await flyToScreen($("review"), $("orders"), ".order-bird", reveal).catch(reveal);
+  }
   await refresh();
 }
 async function transact(type, calls) {
@@ -455,6 +461,12 @@ async function submit(type, calls) {
         await waitEscrowOperation(key, pending.hash),
         pending.type,
       );
+      return;
+    }
+    if (!hasWalletCredential(buyer)) {
+      notice("Reconnect the passkey for this wallet.");
+      await connectWallet(key, false, buyer);
+      notice("Wallet reconnected. You can now confirm the transaction.");
       return;
     }
     if (!funds) throw Error("Wait for your wallet balance to load.");

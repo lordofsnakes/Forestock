@@ -2,6 +2,13 @@ import { test, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 
 test("Circle SDK registers and restores a passkey-backed wallet", async ({ page, context }) => {
+  await page.addInitScript(() => {
+    const get = navigator.credentials.get.bind(navigator.credentials);
+    navigator.credentials.get = options => {
+      window.passkeyRequests = (window.passkeyRequests || 0) + 1;
+      return get(options);
+    };
+  });
   const session = await context.newCDPSession(page);
   await session.send("WebAuthn.enable");
   await session.send("WebAuthn.addVirtualAuthenticator", { options: {
@@ -52,11 +59,14 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
   await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   await page.goto("http://localhost:3271/");
   await expect(page.locator("#walletIntro output")).toHaveText(address);
+  expect(await page.evaluate(async address => (await import("/generated/circle.js")).hasWalletCredential(address), address)).toBe(true);
   await page.getByRole("button", { name: "Continue to order planning" }).click();
   await page.getByRole("button", { name: "Wallet", exact: true }).click();
   await page.getByRole("button", { name: "Use existing passkey" }).click();
   await expect(page.locator("#walletPanel p[role=status]")).toContainText("Passkey verified");
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  // Escrow runs in a different document from registration and login.
+  await page.goto("http://localhost:3271/");
   const receipt = await page.evaluate(async buyer => {
     const {sendEscrowCalls} = await import("/generated/circle.js");
     const config = await (await fetch("/arc-network.json")).json();
@@ -64,6 +74,7 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
     return {hash:r.receipt.transactionHash, success:r.success};
   },address);
   expect(receipt).toEqual({hash:transactionHash,success:true});
+  expect(await page.evaluate(() => window.passkeyRequests)).toBe(1);
   expect(signedOperation.sender.toLowerCase()).toBe(address);
   expect(signedOperation.signature.length).toBeGreaterThan(132);
   await page.evaluate(() => localStorage.removeItem("forestock.arcWallet"));
@@ -72,7 +83,7 @@ test("Circle SDK registers and restores a passkey-backed wallet", async ({ page,
   await page.getByRole("button", { name: "Use existing passkey" }).click();
   await expect(page.getByRole("heading", { name: "Plan an order" })).toBeVisible();
   expect(methods.filter(m=>m.startsWith("rp_") || m==="circle_getAddress")).toEqual(["rp_getRegistrationOptions","rp_getRegistrationVerification","circle_getAddress",
-    "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress",
+    "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress","circle_getAddress",
     "rp_getLoginOptions","rp_getLoginVerification","circle_getAddress"]);
 });
 

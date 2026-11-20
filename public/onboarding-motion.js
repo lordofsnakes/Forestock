@@ -6,6 +6,18 @@ function at(x, y, scale = 1, tilt = 0) {
   return { transform: `translate(${x}px, ${y}px) scale(${scale}) rotate(${tilt}deg)` };
 }
 
+function blendTakeoff(bird, flyer) {
+  // Keep the perched pose in place as the side-facing flight sprite takes over.
+  bird.classList.add("taking-off");
+  const timing = { duration: 200, easing: "ease-in-out", fill: "forwards" };
+  const fade = bird.animate([{ opacity: 1 }, { opacity: 0 }], timing);
+  flyer.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+  return () => {
+    fade.cancel();
+    bird.classList.remove("taking-off");
+  };
+}
+
 export async function flyToScreen(from, to, landingSelector, reveal) {
   if (travelling || from.hidden) return;
   if (matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) {
@@ -20,7 +32,7 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
   const chrome = document.querySelectorAll("body > header, body > nav");
   for (const element of chrome) element.inert = true;
   travelling = from.inert = true;
-  bird.style.visibility = "hidden";
+  const restoreBird = blendTakeoff(bird, flyer);
   const animate = (node, frames, duration, easing = ease) => node.animate(frames, { duration, easing, fill: "forwards" });
   try {
     const size = origin.width / flyer.offsetWidth;
@@ -30,7 +42,8 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
     const lift = Math.max(8, y - 34);
     // Spend the first beat close to the buyer, then accelerate across the screen.
     await animate(flyer, [
-      { ...at(x,y,size), easing:"ease-in-out" },
+      { ...at(x,y,size), easing:"ease-out" },
+      { ...at(x+4,y+2,size*.99,-2), offset:.12, easing:"ease-in-out" },
       { ...at(x+34,lift,size*.92,-7), offset:.52, easing:"ease-in" },
       at(cruiseX,cruiseY,1.15,8),
     ], 1320, "linear").finished;
@@ -51,7 +64,7 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
     ], 860).finished;
   } finally {
     flyer.remove();
-    bird.style.visibility = "";
+    restoreBird();
     if (landing) landing.style.visibility = "";
     entrance?.cancel();
     if (!arrived) reveal();
@@ -97,21 +110,22 @@ export async function flyToArcReview(scene) {
   const origin = bird.getBoundingClientRect();
   const flyer = makeFlyer();
   scene.inert = true;
-  bird.style.visibility = "hidden";
+  const restoreBird = blendTakeoff(bird, flyer);
   const scale = origin.width / flyer.offsetWidth;
   try {
     await flyer.animate([
-      at(origin.left, origin.top, scale),
+      {...at(origin.left, origin.top, scale), easing: "ease-out"},
+      {...at(origin.left + 5, origin.top - 3, scale, -2), offset: .13, easing: "ease-in-out"},
       {...at(origin.left + 32, Math.max(8, origin.top - 34), scale * .94, -6), offset: .5},
       at(innerWidth + 72, Math.max(8, origin.top - 110), 1, 8)
-    ], {duration: 1350, easing: "ease-in", fill: "forwards"}).finished;
+    ], {duration: 1350, easing: "linear", fill: "forwards"}).finished;
     sessionStorage.setItem("forestock.reviewFlight", String(Date.now()));
   } finally {
     openStep("/arc.html");
     // Restore the conversation if the browser caches it for Back.
     window.addEventListener("pageshow", () => {
       flyer.remove();
-      bird.style.visibility = "";
+      restoreBird();
       scene.inert = travelling = false;
     }, {once:true});
   }

@@ -32,7 +32,7 @@ function showAddress() {
 
 function startPlanning() {
   if (busy) return;
-  if (localStorage.getItem(key) && new URLSearchParams(location.search).get("plan") !== "arc") {
+  if (localStorage.getItem(key) && new URLSearchParams(location.search).get("practice") === "1") {
     openStep("/?plan=arc");
     return;
   }

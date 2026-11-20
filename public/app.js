@@ -45,8 +45,8 @@ function initial() {
     activity: [],
   };
 }
-const liveBuyer = new URLSearchParams(location.search).get("plan") === "arc" && localStorage.getItem("forestock.arcWallet");
-const saved = liveBuyer ? null : JSON.parse(localStorage.getItem(key) || "null");
+const livePlanning = new URLSearchParams(location.search).get("practice") !== "1";
+const saved = livePlanning ? null : JSON.parse(localStorage.getItem(key) || "null");
 let s = saved || initial(),
   tab = "Orders";
 // Upgrade the original single-need workspace without rebooking its holds.
@@ -63,7 +63,9 @@ let addingNeed = false;
 const welcome = document.querySelector("#welcome");
 let inSetup = true;
 function finishSetup(lines, allowance) {
-  if (liveBuyer) {
+  if (livePlanning) {
+    const buyer = localStorage.getItem("forestock.arcWallet");
+    if (!buyer) { location.replace("/"); return; }
     const drafts = lines.map(({asset, quantity, dueDate}) => {
       const quote = baseline.find(a => a.series === asset.series) || asset;
       const due = dueDate ? new Date(dueDate + "T23:59:00").getTime() : now() + 2 * day;
@@ -71,7 +73,7 @@ function finishSetup(lines, allowance) {
       return {...compact(quote), quantity, cap: Math.ceil(quote.price * 1.035),
         orderBy: Math.floor((due - day) / 1000), salt: "0x" + salt};
     });
-    localStorage.setItem("forestock.arcDraft." + liveBuyer, JSON.stringify({lines:drafts,allowance}));
+    localStorage.setItem("forestock.arcDraft." + buyer, JSON.stringify({lines:drafts,allowance}));
     flyToArcReview(welcome);
     return;
   }
@@ -166,8 +168,8 @@ form.elements.asset.addEventListener("change", () => {
   form.cap.value = ((selected(form).price / 100) * 1.03).toFixed(2);
 });
 const chat = startChat({
-  choices, material: current(), quantity: order().qty, allowance: liveBuyer ? 1 : s.limit / 100, live: Boolean(liveBuyer),
-  status: order().status, returning: Boolean(saved), availableFunds: liveBuyer ? () => Infinity : available, finish: finishSetup,
+  choices, material: current(), quantity: order().qty, allowance: livePlanning ? 1 : s.limit / 100, live: livePlanning,
+  status: order().status, returning: Boolean(saved), availableFunds: livePlanning ? () => Infinity : available, finish: finishSetup,
 });
 fillPickers();
 function save() {
@@ -275,12 +277,12 @@ function openMarketChat(note) {
   document.querySelector("#welcomeTitle").focus();
 }
 
-if (liveBuyer && new URLSearchParams(location.search).get("talk") === "1") {
+if (new URLSearchParams(location.search).get("plan") === "arc" && new URLSearchParams(location.search).get("talk") === "1") {
   const talk = JSON.parse(sessionStorage.getItem("forestock.arcTalk") || "null");
   if (talk) chat.marketConversation(talk.id, talk.facts, talk.context, talk.draft);
 }
 document.querySelector("#backToOrders").onclick = () => {
-  if (liveBuyer) { openStep("/arc.html"); return; }
+  if (livePlanning) { openStep("/arc.html"); return; }
   chat.leaveMarket();
   welcome.hidden = true;
   document.querySelector("nav").hidden = false;

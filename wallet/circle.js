@@ -10,30 +10,60 @@ const url = "https://modular-sdk.circle.com/v1/rpc/w3s/buidl";
 
 let walletSession;
 
-export async function connectWallet(key, register) {
+const credentialKey = address => "forestock.passkey." + getAddress(address);
+
+function savedCredential(address) {
+  try {
+    const data = JSON.parse(localStorage.getItem(credentialKey(address)));
+    if (data && typeof data.id === "string" && /^[A-Za-z0-9_-]+$/.test(data.id) &&
+        /^0x[a-f0-9]{128}$/i.test(data.publicKey)) return data;
+  } catch {}
+  return null;
+}
+
+export function hasWalletCredential(address) {
+  return walletSession?.account.address.toLowerCase() === address.toLowerCase() || Boolean(savedCredential(address));
+}
+
+async function walletFromCredential(key, credential) {
+  const client = createPublicClient({ chain: arcTestnet, transport: toModularTransport(url + "/arcTestnet", key) });
+  const account = await toCircleSmartAccount({
+    client, owner: toWebAuthnAccount({ credential, rpId: credential.rpId }), name: "Forestock",
+  });
+  return { account, client };
+}
+
+export async function connectWallet(key, register, expectedBuyer) {
   const credential = await toWebAuthnCredential({
     transport: toPasskeyTransport(url, key),
     mode: register ? WebAuthnMode.Register : WebAuthnMode.Login,
     ...(register && { username: "Forestock-" + crypto.randomUUID() }),
   });
+  let session;
   try {
-    const client = createPublicClient({ chain: arcTestnet, transport: toModularTransport(url + "/arcTestnet", key) });
-    const account = await toCircleSmartAccount({
-      client,
-      owner: toWebAuthnAccount({ credential }),
-      name: "Forestock",
-    });
-    walletSession = {account, client};
-    return getAddress(account.address);
+    session = await walletFromCredential(key, credential);
   } catch (cause) {
     throw Object.assign(new Error("Couldn’t load the Arc wallet address.", { cause }), { name: "WalletAddressError" });
   }
+  const address = getAddress(session.account.address);
+  if (expectedBuyer && address !== getAddress(expectedBuyer)) throw Error("That passkey belongs to a different wallet.");
+  const { id, publicKey, rpId } = credential;
+  localStorage.setItem(credentialKey(address), JSON.stringify({ id, publicKey, rpId }));
+  walletSession = session;
+  return address;
 }
 
 export async function sendEscrowCalls(key, expectedBuyer, calls, submitted) {
-  if (!walletSession || getAddress(walletSession.account.address) !== getAddress(expectedBuyer)) {
-    const connected = await connectWallet(key, false);
-    if (connected !== getAddress(expectedBuyer)) throw Error("That passkey belongs to a different wallet.");
+  const buyer = getAddress(expectedBuyer);
+  if (!walletSession || getAddress(walletSession.account.address) !== buyer) {
+    const credential = savedCredential(buyer);
+    if (!credential) throw Error("Reconnect your existing passkey before authorizing escrow.");
+    const session = await walletFromCredential(key, credential);
+    if (getAddress(session.account.address) !== buyer) {
+      localStorage.removeItem(credentialKey(buyer));
+      throw Error("Reconnect the passkey for this wallet.");
+    }
+    walletSession = session;
   }
   const {account, client} = walletSession;
   const bundler = createBundlerClient({ account, client, transport: toModularTransport(url + "/arcTestnet", key) });

@@ -78,7 +78,10 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   await page.route("**/generated/circle.js", (r) =>
     r.fulfill({
       contentType: "application/javascript",
-      body: `export async function sendEscrowCalls(key, buyer, calls, submitted) {
+      body: `let ready = false;
+     export function hasWalletCredential() {return ready;}
+     export async function connectWallet(key, register, expectedBuyer) {window.reconnected = expectedBuyer; ready = true;}
+     export async function sendEscrowCalls(key, buyer, calls, submitted) {
        window.observedCalls = calls;
        submitted("0x" + "cd".repeat(32));
        return {success: true, receipt: {status: "success", transactionHash: "${hash}"}};
@@ -89,7 +92,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   let balance = "0";
   await mockArc(page, () => balance);
   await enterSavedOrders(page);
-  const authorize = page.getByRole("button", {name:"Authorize with passkey"});
+  const authorize = page.locator("#authorize");
   await expect(page.locator("#fundingAddress")).toHaveText(buyer);
   await expect(authorize).toBeDisabled();
   await expect(page.getByRole("link", {name:"Open Circle faucet"})).toHaveAttribute("href","https://faucet.circle.com/");
@@ -103,6 +106,10 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   await expect(authorize).toBeEnabled();
   await expect(page.locator("#fundingHelp")).toBeHidden();
   await expect(page.locator("#approve [name=deposit]")).toHaveValue("0.06");
+  await page.getByRole("button", {name: "Reconnect existing passkey"}).click();
+  await expect(page.getByRole("button", {name:"Authorize with passkey"})).toBeEnabled();
+  expect(await page.evaluate(() => window.reconnected)).toBe(buyer);
+  expect(await page.evaluate(() => window.observedCalls)).toBeUndefined();
   await page.getByRole("button", { name: "Authorize with passkey" }).click();
   await expect(
     page.getByRole("link", { name: /View your transaction/ }),
@@ -125,7 +132,13 @@ test("the sparrow flies from passkey planning into live order review", async ({p
   await page.addInitScript(() => localStorage.setItem("forestock.arcWallet", "0x" + "12".repeat(20)));
   await page.route("**/api/market", r => r.fulfill({json:{assets:[]}}));
   await page.goto("/?plan=arc");
-  for (const name of ["Continue to order planning","Copper","0.01 lb","1 USDC","Review order"]) {
+  const origin = await page.evaluate(() => performance.timeOrigin);
+  await page.getByRole("button", {name: "Continue to order planning"}).click();
+  await expect(page.locator(".perch-bird.taking-off")).toBeAttached();
+  await expect(page.locator(".courier-wing")).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Plan an order"})).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+  for (const name of ["Copper","0.01 lb","1 USDC","Review order"]) {
     await page.getByRole("button",{name,exact:true}).click();
   }
   await expect(page.locator(".courier-wing")).toBeVisible();
