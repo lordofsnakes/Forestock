@@ -104,7 +104,7 @@ test("the copper impact question and a repeated follow-up reach the model with t
   const replies = [
     {reply: "The agent is waiting for a stronger signal."},
     {reply: "The agent is waiting for a stronger signal."},
-    {reply: "The deadline is the other trigger.", fact: "deadline"},
+    {reply: "Are you asking when the agent buys, or whether you need to do anything?"},
   ];
   const turns = [];
   t.mock.method(globalThis, "fetch", async (_url, options) => {
@@ -115,7 +115,8 @@ test("the copper impact question and a repeated follow-up reach the model with t
   assert.deepEqual(first.data, {reply: "The agent is waiting for a stronger signal.", draft});
   messages.push({role: "assistant", content: first.data.reply}, question);
   const second = await request(input);
-  assert.equal(second.data.reply, "The deadline is the other trigger. " + facts.deadline);
+  assert.match(second.data.reply, /whether you need to do anything/);
+  assert.match(turns[1][0].content, /clarifying question/);
   assert.deepEqual(turns[1].slice(2), messages);
   assert.equal(turns.length, 3);
 });
