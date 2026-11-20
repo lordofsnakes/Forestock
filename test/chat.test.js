@@ -38,3 +38,23 @@ test("locked orders retain their quantity when the model proposes a revision", a
   assert.equal(response.code, 200);
   assert.deepEqual(response.data.draft, { ...draft, allowance: 300 });
 });
+
+test("the chat keeps incomplete material lines and buyer wording until clarified", async t => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    choices: [{ message: { content: JSON.stringify({
+      reply: "I have all three. Copper starts at one pound. What quantity works for you?",
+      draft: proposal,
+    }) } }],
+  }));
+  const previous = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
+  const proposal = { series: "COPPER", quantity: null, amountNote: "100 mg", dateNote: "end of this week", allowance: null,
+    additional: [{ label: "oil", series: null, quantity: null }, { label: "gold", series: "XAU", quantity: null }] };
+  const catalog = [...body.catalog, { series: "XAU", name: "Gold", unit: "troy oz" }];
+  const res = await request({ ...body, catalog, localDate: "2026-11-20" });
+  assert.equal(res.code, 200);
+  assert.deepEqual(res.data.draft, proposal);
+  proposal.additional[0].dueDate = "2026-02-31";
+  assert.equal((await request({ ...body, catalog })).code, 503);
+});

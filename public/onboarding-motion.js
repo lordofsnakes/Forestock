@@ -24,14 +24,14 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
   for (const element of chrome) element.inert = true;
   travelling = from.inert = true;
   bird.style.visibility = "hidden";
-  const animate = (node, frames, duration) => node.animate(frames, { duration, easing: ease, fill: "forwards" });
+  const animate = (node, frames, duration, easing = ease) => node.animate(frames, { duration, easing, fill: "forwards" });
   try {
     const size = origin.width / flyer.offsetWidth;
     if (receipt) {
       const box = receipt.getBoundingClientRect();
       const pickupX = box.left + box.width * .46;
       const pickupY = box.top - 30;
-      await animate(flyer, [at(x,y,size), at(x+55,y-20,1,-7), at(pickupX,pickupY,.85,10)], 390).finished;
+      await animate(flyer, [at(x,y,size), at(x+55,y-20,1,-7), at(pickupX,pickupY,.85,10)], 700).finished;
       const slip = document.createElement("div");
       slip.className = "courier-slip";
       slip.textContent = receipt.innerText;
@@ -39,15 +39,21 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
       const paperX = (box.left - pickupX) / .85 - slip.offsetLeft;
       const paperY = (box.top - pickupY) / .85 - slip.offsetTop;
       const fold = animate(slip, [at(paperX,paperY,box.width / (slip.offsetWidth * .85)),
-        at(0,0,1,18)], 240);
+        at(0,0,1,18)], 320);
       receipt.animate([{opacity:1},{opacity:0,transform:"scale(.82)"}], {duration:180,fill:"forwards"});
       await fold.finished;
       x = pickupX; y = pickupY;
     }
     const edgeX = innerWidth + 90;
     const edgeY = Math.max(22, y - 64);
-    const leave = animate(from, [{opacity:1},{opacity:0,transform:"translateX(-14px)"}], 360);
-    await animate(flyer, [at(x,y,receipt ? .85 : size), at(x+70,y-45,1,-9), at(edgeX,edgeY,.83,-4)], 470).finished;
+    const leave = animate(from, [{opacity:1}, {opacity:1,offset:.56}, {opacity:0,transform:"translateX(-14px)"}], 1320, "linear");
+    const lift = Math.max(8, y - 34);
+    // Spend the first beat close to the buyer, then accelerate across the screen.
+    await animate(flyer, [
+      { ...at(x,y,receipt ? .85 : size), easing:"ease-in-out" },
+      { ...at(x+34,lift,receipt ? .87 : size*.92,-7), offset:.52, easing:"ease-in" },
+      at(edgeX,edgeY,.83,-4),
+    ], 1320, "linear").finished;
     arrived = true;
     reveal();
     leave.cancel();
@@ -57,8 +63,8 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
       landing = document.querySelector("header .mark");
     const target = landing.getBoundingClientRect();
     landing.style.visibility = "hidden";
-    entrance = animate(to, [{opacity:0,transform:"translateX(18px)"},{opacity:1,transform:"none"}], 450);
-    await animate(flyer, [at(-90,Math.max(8,target.top-40),.83,-7), at(target.left,target.top,target.width/flyer.offsetWidth)], 510).finished;
+    entrance = animate(to, [{opacity:0,transform:"translateX(18px)"},{opacity:1,transform:"none"}], 650);
+    await animate(flyer, [at(-90,Math.max(8,target.top-40),.83,-7), at(target.left,target.top,target.width/flyer.offsetWidth)], 740).finished;
   } finally {
     flyer.remove();
     bird.style.visibility = "";

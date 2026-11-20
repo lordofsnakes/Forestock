@@ -12,19 +12,42 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   function say(content, role = "assistant") {
     const line = document.createElement("p");
     line.className = (role === "user" ? "buyer" : "helper") + " message step-enter";
-    line.textContent = content;
+    if (role === "assistant") {
+      const avatar = document.createElement("img");
+      avatar.src = "/sparrow.png";
+      avatar.alt = "Sparrow";
+      avatar.width = avatar.height = 38;
+      const bubble = document.createElement("span");
+      bubble.className = "speech";
+      bubble.textContent = content;
+      line.append(avatar, bubble);
+    } else {
+      line.textContent = content;
+    }
     messages.append(line);
     messages.scrollTop = messages.scrollHeight;
     history.push({ role, content });
     if (history.length > 16) history.shift();
   }
 
-  function selected() {
-    return choices().find(a => a.series === draft.series);
+  function lines() {
+    return [draft, ...(draft.additional || [])];
+  }
+
+  function selected(line) {
+    return choices().find(a => a.series === line.series);
+  }
+
+  function incompleteLine() {
+    return lines().find(line => !selected(line) || line.quantity === null || line.dateNote);
   }
 
   function ready() {
-    return selected() && draft.quantity !== null && draft.allowance !== null;
+    return !incompleteLine() && draft.allowance !== null;
+  }
+
+  function review() {
+    finish(lines().map(line => ({ asset: selected(line), quantity: line.quantity, dueDate: line.dueDate })), draft.allowance);
   }
 
   function printLine(id, value) {
@@ -38,10 +61,13 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   }
 
   function refreshSuggestions() {
-    const asset = selected();
-    printLine("receiptNeed", asset
-      ? (draft.quantity === null ? asset.name : draft.quantity + " " + asset.unit + " of " + asset.name)
-      : "Material pending");
+    printLine("receiptNeed", lines().map(line => {
+      const asset = selected(line);
+      const name = asset?.name || line.label || "Material pending";
+      const amount = asset && line.quantity !== null ? line.quantity + " " + asset.unit + " of " : "";
+      const timing = line.dueDate ? " · by " + line.dueDate : line.dateNote ? " · " + line.dateNote + "?" : "";
+      return (line.amountNote ? line.amountNote + " of " : amount) + name + timing;
+    }).join("\n"));
     printLine("receiptLimit", draft.allowance === null
       ? "Weekly allowance pending" : draft.allowance.toLocaleString("en-US") + " test USDC per week");
     suggestions.replaceChildren();
@@ -53,25 +79,31 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       suggestions.append(button);
     }
     if (pending) return;
+    const line = incompleteLine();
     if (ready()) {
-      offer("Review order", () => finish(selected(), draft.quantity, draft.allowance));
-    } else if (!selected()) {
-      for (const a of choices()) offer(a.name, () => pick(a.name, { series: a.series }));
-    } else if (draft.quantity === null) {
-      const label = quantity + " " + selected().unit;
-      offer(label, () => pick(label, { quantity }));
+      offer("Review order", review);
+    } else if (line && !selected(line)) {
+      for (const a of choices()) offer(a.name, () => pick(a.name, line, { series: a.series }));
+    } else if (line) {
+      if (line.quantity !== null || line.amountNote || draft.additional?.length) return;
+      const label = quantity + " " + selected(line).unit;
+      offer(label, () => pick(label, line, { quantity }));
     } else {
       const label = allowance + " USDC";
-      offer(label, () => pick(label, { allowance }));
+      offer(label, () => pick(label, draft, { allowance }));
     }
   }
 
-  function pick(label, update) {
+  function pick(label, line, update) {
     say(label, "user");
-    Object.assign(draft, update);
+    Object.assign(line, update);
+    if (update.quantity !== undefined) delete line.amountNote;
     restart.hidden = false;
-    if (ready()) say("Ready when you are. Review your order below or tell me what to change.");
-    else if (draft.quantity === null) say("How much " + selected().name + " do you need, in " + selected().unit + "?");
+    const missing = incompleteLine();
+    if (ready()) say("I’ve filled in your request. You can review it or tell me what to change.");
+    else if (missing && !selected(missing)) say("Which catalog material should I use for " + (missing.label || "this need") + "?");
+    else if (missing?.quantity !== null && missing?.dateNote) say("Which day should I use for " + missing.dateNote + "?");
+    else if (missing) say("How much " + selected(missing).name + " do you need, in " + selected(missing).unit + "?");
     else say("What weekly spending allowance should I use, in test USDC?");
     refreshSuggestions();
   }
@@ -99,7 +131,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     const text = input.value.trim();
     if (!text || pending) return;
     if (ready() && /^(yes|confirm|review order)[.!]?$/i.test(text)) {
-      finish(selected(), draft.quantity, draft.allowance);
+      review();
       return;
     }
     say(text, "user");
@@ -111,10 +143,12 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     send.textContent = "Thinking…";
     refreshSuggestions();
     try {
+      const today = new Date();
+      const localDate = new Date(+today - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       const response = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: request.signal,
-        body: JSON.stringify({ messages: history, draft, locked,
+        body: JSON.stringify({ messages: history, draft, locked, localDate,
           catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
         }),
       });

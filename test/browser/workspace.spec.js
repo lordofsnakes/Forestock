@@ -287,3 +287,40 @@ test("the sparrow carries the buyer’s completed slip into the orders screen", 
   await expect(page.locator(".courier")).toHaveCount(0);
   await expect(page.locator(".need-entry")).toHaveCount(1);
 });
+
+test("a returning buyer can clarify a mixed-material request and review all three needs", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page, "NGAS");
+  await page.reload();
+  await button(page, "Manual setup").click();
+  await button(page, "Continue with demo balance").click();
+  const log = page.getByRole("log");
+  await expect(log).toContainText("You last chose Natural Gas");
+  const additional = [
+    { label: "oil", series: null, quantity: null },
+    { label: "gold", series: "XAU", quantity: null },
+  ];
+  const initial = { series: "COPPER", quantity: null, allowance: null, additional };
+  let turn = 0;
+  await page.route("**/api/chat", route => {
+    const request = route.request().postDataJSON();
+    expect(request.catalog.map(a => a.series)).toEqual(expect.arrayContaining(["COPPER", "XAU", "BRENT", "WTI"]));
+    if (++turn === 1) return route.fulfill({ json: { draft: initial, reply: "Copper starts at 1 lb. Did you mean 100 mg? I also have oil and gold on your list." } });
+    expect(request.draft).toEqual(initial);
+    return route.fulfill({ json: { reply: "I’ve filled in all three needs.", draft: {
+      series: "COPPER", quantity: 1, allowance: 3000, dueDate: "2027-02-05",
+      additional: [{ ...additional[0], series: "BRENT", quantity: 2 }, { ...additional[1], quantity: 3 }],
+    } } });
+  });
+  await send(page, "I need 100mg of copper by the end of this week, and also a bit of oil and gold as well");
+  await expect(log.locator(".helper").last().getByRole("img", { name: "Sparrow" })).toBeVisible();
+  await expect(page.locator("#receiptNeed")).toHaveText("Copper\noil\nGold");
+  await expect(button(page, "Review order")).toHaveCount(0);
+  await send(page, "Make it 1 lb copper by February 5 2027, 2 bbl Brent and 3 troy oz gold. 3000 USDC/week.");
+  await button(page, "Review order").click();
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")));
+  expect(state.orders.map(o => [o.asset.series, o.qty])).toEqual([["NGAS", 100], ["COPPER", 1], ["BRENT", 2], ["XAU", 3]]);
+  const date = await page.evaluate(() => new Date("2027-02-05T23:59:00").getTime());
+  expect(state.orders[1].due).toBe(date);
+  expect(state.limit).toBe(300000);
+});

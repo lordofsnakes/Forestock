@@ -433,7 +433,12 @@ select {
 .draft-terms { display:flex; justify-content:space-between; gap:6px 16px; flex-wrap:wrap; flex-basis:auto; padding:8px 0; border-bottom:1px dashed #bdaf9d; font-size:13px; font-weight:normal; }
 #messages { padding:14px 0 2px; }
 .receipt .message { font-size:clamp(15px,2vw,17px); line-height:1.45; }
-.receipt .helper { background:transparent; border-left:2px solid #c99976; border-radius:0; padding:2px 11px; }
+.receipt .helper { display:flex; align-items:flex-start; gap:8px; max-width:min(97%, 49ch); background:transparent; padding:0; }
+.helper img { flex:none; object-fit:contain; }
+.speech { position:relative; margin-top:3px; padding:8px 11px; background:#f3ede1; border-radius:0 9px 9px; }
+.speech::before { content:""; position:absolute; top:7px; right:100%; border:5px solid transparent; border-right-color:#f3ede1; border-left:0; }
+#receiptNeed { white-space:pre-line; }
+.draft-terms { max-height:18vh; overflow:auto; }
 .receipt .buyer { background:#f1e8d8; color:#513521; border-radius:2px; padding:7px 11px; }
 .reply-area { border-top:1px dashed #bdaf9d; }
 #setup input { background:transparent; border:0; border-bottom:1px solid #977a61; border-radius:0; padding:8px 2px; }
@@ -447,7 +452,7 @@ select {
     0%, 10%, 36%, 62%, 100% { transform: rotate(0); }
     23%, 48% { transform: rotate(var(--wing-lift)); }
   }
-  .courier > span::after { animation:flap .18s ease-in-out infinite; }
+  .courier > span::after { animation:flap .32s ease-in-out infinite; }
   @keyframes perch-hop {
     0%, 74%, 100% { transform: none; }
     11%, 63% { transform: scale(1.035, .95); }

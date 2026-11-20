@@ -61,21 +61,24 @@ function order() {
 let addingNeed = false;
 const welcome = document.querySelector("#welcome");
 let inSetup = true;
-function finishSetup(asset, quantity, allowance) {
-  flyToScreen(welcome, el, ".order-bird", () => openOrder(asset, quantity, allowance), welcome.querySelector(".draft-terms"));
+function finishSetup(lines, allowance) {
+  flyToScreen(welcome, el, ".order-bird", () => openOrder(lines, allowance), welcome.querySelector(".draft-terms"));
 }
-function openOrder(asset, quantity, allowance) {
-  if (order().status === "Watching") {
-    if (saved && asset.series !== current().series) {
-      const need = { ...initial().order, asset: compact(asset), id: crypto.randomUUID() };
-      s.orders.push(need);
-      s.selectedId = need.id;
+function openOrder(lines, allowance) {
+  const previous = order();
+  const previousSeries = current().series;
+  for (const [index, { asset, quantity, dueDate }] of lines.entries()) {
+    if (index === 0 && previous.status !== "Watching") continue;
+    const reuse = index === 0 && (!saved || asset.series === previousSeries);
+    const need = reuse ? previous : { ...initial().order, id: crypto.randomUUID() };
+    if (!reuse || !saved) {
+      need.asset = compact(asset);
       need.cap = Math.ceil(asset.price * 1.035);
-    } else if (!saved) {
-      order().asset = compact(asset);
-      order().cap = Math.ceil(asset.price * 1.035);
     }
-    order().qty = quantity;
+    need.qty = quantity;
+    if (dueDate) need.due = new Date(dueDate + "T23:59:00").getTime();
+    if (!reuse) s.orders.push(need);
+    if (index === 0) s.selectedId = need.id;
   }
   syncMarket();
   s.limit = Math.round(allowance * 100);
@@ -119,7 +122,9 @@ const copper = {
   price: 580,
   premium: 12,
 };
-let assets = [copper];
+// Buyers can plan a catalog item even while its live market is loading or closed.
+const baseline = await fetch("/commodities.json").then(r => r.json()).then(data => data.assets).catch(() => [copper]);
+let assets = baseline.map(compact);
 function current() {
   return order().asset || copper;
 }
@@ -448,10 +453,12 @@ async function loadMarket() {
   try {
     const r = await fetch("/api/market");
     if (!r.ok) throw Error();
-    assets = (await r.json()).assets;
+    const live = (await r.json()).assets;
+    const active = new Set(live.map(asset => asset.series));
+    assets = [...live, ...baseline.filter(asset => !active.has(asset.series)).map(compact)];
     replay = false;
   } catch {
-    assets = (await (await fetch("/commodities.json")).json()).assets;
+    assets = baseline;
     replay = true;
   }
   fillPickers();
