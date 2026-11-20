@@ -16,7 +16,7 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
   const flyer = document.createElement("div");
   flyer.className = "bird courier";
   flyer.setAttribute("aria-hidden", "true");
-  flyer.append(document.createElement("span"));
+  flyer.append(document.querySelector("#flight-art").content.cloneNode(true));
   document.body.append(flyer);
   const x = origin.left, y = origin.top;
   let arrived = false, landing, entrance;
@@ -27,15 +27,15 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
   const animate = (node, frames, duration, easing = ease) => node.animate(frames, { duration, easing, fill: "forwards" });
   try {
     const size = origin.width / flyer.offsetWidth;
-    const edgeX = innerWidth + 90;
-    const edgeY = Math.max(22, y - 64);
+    const cruiseX = Math.max(12, Math.min(innerWidth - 96, x + innerWidth * .42));
+    const cruiseY = Math.max(12, y - 85);
     const leave = animate(from, [{opacity:1}, {opacity:1,offset:.56}, {opacity:0,transform:"translateX(-14px)"}], 1320, "linear");
     const lift = Math.max(8, y - 34);
     // Spend the first beat close to the buyer, then accelerate across the screen.
     await animate(flyer, [
       { ...at(x,y,size), easing:"ease-in-out" },
       { ...at(x+34,lift,size*.92,-7), offset:.52, easing:"ease-in" },
-      at(edgeX,edgeY,.83,-4),
+      at(cruiseX,cruiseY,1.15,8),
     ], 1320, "linear").finished;
     arrived = true;
     reveal();
@@ -47,7 +47,11 @@ export async function flyToScreen(from, to, landingSelector, reveal) {
     const target = landing.getBoundingClientRect();
     landing.style.visibility = "hidden";
     entrance = animate(to, [{opacity:0,transform:"translateX(18px)"},{opacity:1,transform:"none"}], 650);
-    await animate(flyer, [at(-90,Math.max(8,target.top-40),.83,-7), at(target.left,target.top,target.width/flyer.offsetWidth)], 740).finished;
+    await animate(flyer, [
+      at(cruiseX,cruiseY,1.15,8),
+      at((cruiseX+target.left)/2, Math.max(8, Math.min(cruiseY,target.top)-30),1.22,-3),
+      at(target.left,target.top,target.width/flyer.offsetWidth),
+    ], 860).finished;
   } finally {
     flyer.remove();
     bird.style.visibility = "";

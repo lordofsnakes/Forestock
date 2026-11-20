@@ -36,7 +36,7 @@ export function sparrowSpeech(scene, log) {
     for (const animation of beat) animation.cancel();
     beat = [
       mouth.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], timing),
-      bill.animate([{ transform: "none" }, { transform: "translateY(14px)" }, { transform: "none" }], timing),
+      bill.animate([{ transform: "none" }, { transform: "rotate(22deg)" }, { transform: "none" }], timing),
     ];
     const pause = /[.!?…]["’”)]?$/.test(word.trim()) ? 160 : /[,;:]$/.test(word.trim()) ? 75 : 12;
     timer = setTimeout(reply.index === reply.words.length ? finish : revealWord, duration + pause);
@@ -67,8 +67,10 @@ export function sparrowSpeech(scene, log) {
     const visual = document.createElement("span");
     visual.className = "speech";
     visual.setAttribute("aria-hidden", "true");
-    line.append(accessible, visual);
-    // Reserve the greeting's lines so its centered words stay put while fading in.
+    bird.closest(".speaker-turn")?.classList.remove("speaker-turn");
+    line.classList.add("speaker-turn");
+    line.append(bird, accessible, visual);
+    // Reserve room for the greeting during the handoff from the wallet screen.
     let remainder = null;
     if (!log.childElementCount) {
       remainder = document.createElement("span");

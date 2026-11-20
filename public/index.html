@@ -80,15 +80,15 @@
       </div>
       <button class="bird portrait" aria-label="Animate the copper-winged sparrow">
         <span>
-          <svg viewBox="0 0 480 480" aria-hidden="true" focusable="false">
+          <svg viewBox="0 0 400 400" aria-hidden="true" focusable="false">
             <defs>
               <clipPath id="lower-bill-clip">
-                <path d="M219 144 Q238 158 259 144 Q256 155 245 170 Q240 177 235 171 Q224 157 219 144Z"/>
+                <path d="M309 99 Q329 92 347 75 Q337 96 327 105 Q316 110 309 99Z"/>
               </clipPath>
             </defs>
-            <image href="/sparrow-front.png" width="480" height="480"/>
-            <path class="mouth-opening" fill="#49281e" d="M219 144 Q239 158 259 144 Q256 160 246 169 Q239 176 232 168 Q224 160 219 144Z"/>
-            <g class="lower-bill"><image href="/sparrow-front.png" width="480" height="480" clip-path="url(#lower-bill-clip)"/></g>
+            <image href="/sparrow.png" width="400" height="400"/>
+            <path class="mouth-opening" fill="#4b291b" d="M309 99 Q329 91 347 75 L346 84 Q333 101 321 107Z"/>
+            <g class="lower-bill"><image href="/sparrow.png" width="400" height="400" clip-path="url(#lower-bill-clip)"/></g>
           </svg>
         </span>
       </button>
@@ -102,6 +102,25 @@
         <button id="restart" type="button" hidden>Start over</button>
       </div>
     </section>
+    <template id="flight-art">
+      <svg viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+        <defs>
+          <path id="flight-feathers" d="M92 251 C97 208 138 159 190 149 C227 141 256 153 259 184 C263 225 225 268 162 287 C123 300 84 297 92 251Z"/>
+          <clipPath id="wing-shape"><use href="#flight-feathers"/></clipPath>
+          <mask id="flying-body">
+            <rect width="400" height="400" fill="white"/>
+            <use href="#flight-feathers" fill="black" stroke="black" stroke-width="4"/>
+          </mask>
+          <clipPath id="underwing-shape"><path d="M132 135 Q219 106 274 157 L277 248 Q228 314 120 302 Q97 277 103 249 Q110 195 132 165Z"/></clipPath>
+        </defs>
+        <g clip-path="url(#underwing-shape)">
+          <rect x="98" y="125" width="185" height="184" fill="#eed1a7"/>
+          <image href="/sparrow.png" width="400" height="400" transform="translate(-970 44) scale(3.8 1)"/>
+        </g>
+        <image href="/sparrow.png" width="400" height="400" mask="url(#flying-body)"/>
+        <g class="courier-wing"><image href="/sparrow.png" width="400" height="400" clip-path="url(#wing-shape)"/></g>
+      </svg>
+    </template>
     <main hidden id="app" aria-live="polite">Loading orders…</main>
     <nav hidden aria-label="Workspace">
       <button data-tab="Orders">Orders</button

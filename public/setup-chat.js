@@ -1,6 +1,6 @@
 import { sparrowSpeech } from "./sparrow-speech.js";
 
-export function startChat({ choices, material, quantity, allowance, status, returning, finish }) {
+export function startChat({ choices, material, quantity, allowance, status, returning, availableFunds, finish }) {
   const form = document.querySelector("#setup");
   const input = form.elements.reply;
   const send = form.querySelector("button");
@@ -86,8 +86,19 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       for (const a of choices()) offer(a.name, () => pick(a.name, line, { series: a.series }));
     } else if (line) {
       if (line.quantity !== null || line.amountNote || draft.additional?.length) return;
-      const label = quantity + " " + selected(line).unit;
-      offer(label, () => pick(label, line, { quantity }));
+      const asset = selected(line);
+      const funds = availableFunds(draft.allowance === null ? undefined : Math.round(draft.allowance * 100));
+      if (asset.price > funds) {
+        suggestions.textContent = "One " + asset.unit + " costs " + (asset.price / 100).toFixed(2) +
+          " USDC. Your demo spending balance is " + (funds / 100).toFixed(2) + " USDC.";
+        return;
+      }
+      const label = "1 " + asset.unit;
+      offer(label, () => pick(label, line, { quantity: 1 }));
+      if (returning && material.series === line.series && quantity > 1 && quantity * asset.price <= funds) {
+        const keep = "Keep " + quantity + " " + asset.unit;
+        offer(keep, () => pick(keep, line, { quantity }));
+      }
     } else {
       const label = allowance + " USDC";
       offer(label, () => pick(label, draft, { allowance }));

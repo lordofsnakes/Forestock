@@ -77,7 +77,7 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await button(page, "Run at cutoff").click();
   await expect(page.getByRole("heading", { name: "Funds held" })).toBeVisible();
   await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$10.00");
+  await expect(page.locator(".big")).toHaveText("$584.20");
   await button(page, "Orders").click();
   await button(page, "Decline").click();
   await page.reload();
@@ -136,7 +136,7 @@ test("live data advances an eligible order and supplier acceptance persists", as
     page.getByRole("heading", { name: "Supplier receipt" }),
   ).toBeVisible();
   await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$20.00");
+  await expect(page.locator(".big")).toHaveText("$594.20");
 });
 test("legacy orders require onboarding; mascot respects reduced motion", async ({
   page,
@@ -172,6 +172,8 @@ test("legacy orders require onboarding; mascot respects reduced motion", async (
   await page.getByRole("button", { name: "Manual setup" }).click();
   await button(page, "Continue with demo balance").click();
   await expect(page.locator(".message").last()).toHaveCSS("animation-name", "none");
+  await button(page, "Copper").click();
+  await button(page, "Keep 7 lb").click();
   await finishSetup(page);
   await expect(page.locator(".order-summary")).toContainText("7 lb");
   await expect(page.locator("#welcome")).toBeHidden();
@@ -237,7 +239,7 @@ test("AI outage keeps the message available for retry and quick replies still wo
   await expect(page.getByRole("log")).toContainText("couldn’t reach AI chat");
   await expect(page.getByRole("textbox")).toHaveValue("What is a weekly allowance?");
   await finishSetup(page);
-  await expect(page.locator(".order-summary")).toContainText("100 lb");
+  await expect(page.locator(".order-summary")).toContainText("1 lb");
 });
 
 test("multiple needs survive a reload and settle against one shared balance", async ({ page }) => {
@@ -253,10 +255,10 @@ test("multiple needs survive a reload and settle against one shared balance", as
     await cutoff.click();
   }
   await hold();
-  await page.getByRole("button", { name: /Copper · 100 lb/ }).click();
+  await page.getByRole("button", { name: /Copper · 1 lb/ }).click();
   await hold();
   await button(page, "Budget").click();
-  const held = 58000 + data.assets.find(a => a.series === "NGAS").price;
+  const held = 580 + data.assets.find(a => a.series === "NGAS").price;
   await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText((held / 100).toFixed(2));
   await page.reload();
   await page.getByRole("button", { name: "Manual setup" }).click();
@@ -277,9 +279,14 @@ test("the sparrow flies from the conversation to the reviewed orders", async ({ 
   await expect(button(page, "Continue with demo balance")).toBeHidden();
   await button(page, "Manual setup").click();
   await button(page, "Continue with demo balance").click();
-  await expect(page.locator(".courier")).toBeAttached();
+  const wing = await page.locator(".courier-wing").elementHandle();
+  const beforeSwap = await wing.evaluate(node => node.getAnimations()[0].currentTime);
+  await page.waitForFunction(() => !document.querySelector("#welcome").hidden);
+  const afterSwap = await wing.evaluate(node => ({ attached: node.isConnected, time: node.getAnimations()[0].currentTime }));
+  expect(afterSwap.attached).toBe(true);
+  expect(afterSwap.time).toBeGreaterThan(beforeSwap);
   await button(page, "Natural Gas").click();
-  await button(page, "100 MMBtu").click();
+  await button(page, "1 MMBtu").click();
   await button(page, "600 USDC").click();
   await button(page, "Review order").click();
   await expect(page.locator(".courier")).toBeAttached();
@@ -320,7 +327,7 @@ test("a returning buyer can clarify a mixed-material request and review all thre
   await send(page, "Make it 1 lb copper by February 5 2027, 2 bbl Brent and 3 troy oz gold. 3000 USDC/week.");
   await button(page, "Review order").click();
   const state = await page.evaluate(() => JSON.parse(localStorage.getItem("forestock.v1")));
-  expect(state.orders.map(o => [o.asset.series, o.qty])).toEqual([["NGAS", 100], ["COPPER", 1], ["BRENT", 2], ["XAU", 3]]);
+  expect(state.orders.map(o => [o.asset.series, o.qty])).toEqual([["NGAS", 1], ["COPPER", 1], ["BRENT", 2], ["XAU", 3]]);
   const date = await page.evaluate(() => new Date("2027-02-05T23:59:00").getTime());
   expect(state.orders[1].due).toBe(date);
   expect(state.limit).toBe(300000);
@@ -340,8 +347,15 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
   const last = page.locator("#messages .helper").last();
   await expect(last.locator(".sr-only")).toHaveText("Sparrow: " + reply);
   await expect(last.locator(".spoken-word").first()).toBeVisible();
+  const gap = await last.evaluate(line => {
+    const bird = line.querySelector(".portrait").getBoundingClientRect();
+    const word = line.querySelector(".spoken-word").getBoundingClientRect();
+    return { x: word.left - (bird.left + bird.width * .87), y: word.top + word.height / 2 - (bird.top + bird.height * .20) };
+  });
+  expect(Math.abs(gap.x)).toBeLessThan(12);
+  expect(Math.abs(gap.y)).toBeLessThan(12);
   const motion = await page.locator(".lower-bill").evaluate(el => el.getAnimations().map(a => a.effect.getKeyframes()));
-  expect(motion.flat().some(frame => frame.transform === "translateY(14px)")).toBe(true);
+  expect(motion.flat().some(frame => frame.transform === "rotate(22deg)")).toBe(true);
   await expect(page.locator(".portrait.speaking")).toHaveCount(0);
   await expect(last.locator(".speech")).toHaveText(reply);
   await expect(page.locator(".lower-bill")).toHaveCSS("transform", "none");
@@ -350,4 +364,15 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
   await expect(page.locator(".helper")).toHaveCount(3);
   await expect(page.locator(".helper").last().locator(".speech")).toHaveText(reply);
   await expect(page.locator(".portrait.speaking, .spoken-word")).toHaveCount(0);
+});
+
+
+test("a commodity above the available demo budget has no suggested purchase quantity", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await button(page, "Manual setup").click();
+  await button(page, "Continue with demo balance").click();
+  await button(page, "Gold").click();
+  await expect(page.locator("#suggestions")).toContainText("Your demo spending balance is 600.00 USDC");
+  await expect(button(page, "1 troy oz")).toHaveCount(0);
 });

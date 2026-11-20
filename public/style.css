@@ -428,15 +428,24 @@ select {
 #draftNeeds { white-space: pre-line; }
 #draftAllowance { margin-top: 4px; color: #69574a; }
 #welcome .portrait {
-  align-self: center; width: clamp(116px, 24dvh, 220px); height: auto; aspect-ratio: 1;
+  align-self: start; width: var(--speaker-size, 132px); aspect-ratio: 1;
+  position: sticky; top: 0; grid-column: 1; grid-row: 1;
 }
 .portrait > span { background: none; }
 .portrait > span::after { content: none; }
 .portrait svg { display: block; width: 100%; height: 100%; }
 .mouth-opening { opacity: 0; }
+.lower-bill { transform-origin: 310px 99px; }
 #messages { min-height: 48px; padding: 8px 2px 4px; overscroll-behavior: contain; }
 #messages .helper { padding: 0; max-width: 48ch; background: transparent; font-size: clamp(17px, 4.6vw, 20px); line-height: 1.5; }
-#messages .helper:only-child { margin-inline: auto; text-align: center; max-width: 39ch; }
+#messages .speaker-turn {
+  --speaker-size: clamp(116px, 34vw, 184px);
+  display: grid; grid-template-columns: calc(var(--speaker-size) * .89) minmax(0, 1fr);
+  align-items: start; width: 100%; max-width: none;
+}
+.speaker-turn .speech {
+  grid-column: 2; grid-row: 1; padding-top: max(0px, calc(var(--speaker-size) * .20 - .75em));
+}
 #messages .buyer { padding: 7px 12px; background: #efe6d7; color: #513521; border-radius: 12px 12px 2px 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #setup input { flex: 1; border: 1px solid #cbbca8; background: #fffcf6; border-radius: 5px; padding: 9px 12px; }
@@ -452,7 +461,11 @@ select {
     0%, 10%, 36%, 62%, 100% { transform: rotate(0); }
     23%, 48% { transform: rotate(var(--wing-lift)); }
   }
-  .courier > span::after { animation:flap .32s ease-in-out infinite; }
+  .courier-wing { transform-origin: 219px 175px; animation: flight-beat 340ms ease-in-out infinite; }
+  @keyframes flight-beat {
+    0%, 100% { transform: rotate(-8deg); }
+    48% { transform: rotate(80deg) scaleY(.94); }
+  }
   @keyframes perch-hop {
     0%, 74%, 100% { transform: none; }
     11%, 63% { transform: scale(1.035, .95); }
@@ -461,4 +474,5 @@ select {
     58% { transform: none; }
   }
 }
-@media (max-height:560px) { #welcome { min-height: 300px; gap: 4px; } #welcome .portrait { width: clamp(88px, 19dvh, 110px); } #walletIntro { padding-top:22px; } }
+.courier svg { display:block; width:100%; height:100%; overflow:visible; }
+@media (max-height:560px) { #welcome { min-height: 300px; gap: 4px; } #messages .speaker-turn { --speaker-size: clamp(92px, 24dvh, 120px); } #walletIntro { padding-top:22px; } }

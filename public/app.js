@@ -34,7 +34,7 @@ function initial() {
     balance: 100000,
     paused: false,
     order: {
-      qty: 100,
+      qty: 1,
       cap: 600,
       due: now() + 2 * day,
       notes: "",
@@ -155,7 +155,7 @@ form.elements.asset.addEventListener("change", () => {
 });
 const chat = startChat({
   choices, material: current(), quantity: order().qty, allowance: s.limit / 100,
-  status: order().status, returning: Boolean(saved), finish: finishSetup,
+  status: order().status, returning: Boolean(saved), availableFunds: available, finish: finishSetup,
 });
 fillPickers();
 function save() {
@@ -165,8 +165,8 @@ function record(title, reason) {
   s.activity.unshift({ title, reason, time: now() });
   save();
 }
-function available() {
-  return Math.max(0, Math.min(s.balance, s.limit - s.used));
+function available(limit = s.limit) {
+  return Math.max(0, Math.min(s.balance, limit - s.used));
 }
 function row(k, v) {
   return (
