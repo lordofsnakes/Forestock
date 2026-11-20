@@ -56,7 +56,7 @@ async function loadWallet() {
     sdk = await import("./generated/circle.js");
     if (id !== loadId) return;
     status.textContent = panel.open ? (address.hidden ? "Connect a passkey to this wallet." : "Your saved wallet address")
-      : (next.hidden ? "Your passkey also secures an Arc Testnet wallet." : "Your account is ready on this device.");
+      : "";
     register.disabled = login.disabled = false;
   } catch (error) {
     if (id !== loadId) return;

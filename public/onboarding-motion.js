@@ -12,7 +12,7 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
     return;
   }
   const bird = from.querySelector(".perch-bird, .portrait");
-  const origin = bird.getBoundingClientRect();
+  const origin = bird.querySelector("span").getBoundingClientRect();
   const flyer = document.createElement("div");
   flyer.className = "bird courier";
   flyer.setAttribute("aria-hidden", "true");
