@@ -1,8 +1,12 @@
+import { sparrowSpeech } from "./sparrow-speech.js";
+
 export function startChat({ choices, material, quantity, allowance, status, returning, finish }) {
   const form = document.querySelector("#setup");
   const input = form.elements.reply;
   const send = form.querySelector("button");
   const messages = document.querySelector("#messages");
+  const speech = sparrowSpeech(document.querySelector("#welcome"), messages);
+  const draftDetails = document.querySelector("#chatDraft");
   const suggestions = document.querySelector("#suggestions");
   const restart = document.querySelector("#restart");
   const locked = status !== "Watching";
@@ -11,21 +15,16 @@ export function startChat({ choices, material, quantity, allowance, status, retu
 
   function say(content, role = "assistant") {
     const line = document.createElement("p");
-    line.className = (role === "user" ? "buyer" : "helper") + " message step-enter";
     if (role === "assistant") {
-      const avatar = document.createElement("img");
-      avatar.src = "/sparrow.png";
-      avatar.alt = "Sparrow";
-      avatar.width = avatar.height = 38;
-      const bubble = document.createElement("span");
-      bubble.className = "speech";
-      bubble.textContent = content;
-      line.append(avatar, bubble);
+      line.className = "helper message";
+      speech.speak(line, content);
     } else {
+      speech.finish();
+      line.className = "buyer message step-enter";
       line.textContent = content;
+      messages.append(line);
+      messages.scrollTop = messages.scrollHeight;
     }
-    messages.append(line);
-    messages.scrollTop = messages.scrollHeight;
     history.push({ role, content });
     if (history.length > 16) history.shift();
   }
@@ -61,14 +60,15 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   }
 
   function refreshSuggestions() {
-    printLine("receiptNeed", lines().map(line => {
+    draftDetails.hidden = !draft.series && !draft.additional?.length && draft.allowance === null;
+    printLine("draftNeeds", lines().map(line => {
       const asset = selected(line);
       const name = asset?.name || line.label || "Material pending";
       const amount = asset && line.quantity !== null ? line.quantity + " " + asset.unit + " of " : "";
       const timing = line.dueDate ? " · by " + line.dueDate : line.dateNote ? " · " + line.dateNote + "?" : "";
       return (line.amountNote ? line.amountNote + " of " : amount) + name + timing;
     }).join("\n"));
-    printLine("receiptLimit", draft.allowance === null
+    printLine("draftAllowance", draft.allowance === null
       ? "Weekly allowance pending" : draft.allowance.toLocaleString("en-US") + " test USDC per week");
     suggestions.replaceChildren();
     function offer(label, action) {
@@ -112,10 +112,12 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     pending?.abort();
     pending = null;
     history.length = 0;
+    speech.finish();
+    draftDetails.open = false;
     messages.replaceChildren();
     draft = { series: locked ? material.series : null, quantity: locked ? quantity : null, allowance: null };
     input.value = "";
-    input.placeholder = "Ask a question or describe your order";
+    input.placeholder = "Message your sparrow…";
     send.disabled = false;
     send.textContent = "Send";
     restart.hidden = true;

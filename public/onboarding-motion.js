@@ -5,7 +5,7 @@ function at(x, y, scale = 1, tilt = 0) {
   return { transform: `translate(${x}px, ${y}px) scale(${scale}) rotate(${tilt}deg)` };
 }
 
-export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
+export async function flyToScreen(from, to, landingSelector, reveal) {
   if (travelling || from.hidden) return;
   if (matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) {
     reveal();
@@ -18,7 +18,7 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
   flyer.setAttribute("aria-hidden", "true");
   flyer.append(document.createElement("span"));
   document.body.append(flyer);
-  let x = origin.left, y = origin.top;
+  const x = origin.left, y = origin.top;
   let arrived = false, landing, entrance;
   const chrome = document.querySelectorAll("body > header, body > nav");
   for (const element of chrome) element.inert = true;
@@ -27,31 +27,14 @@ export async function flyToScreen(from, to, landingSelector, reveal, receipt) {
   const animate = (node, frames, duration, easing = ease) => node.animate(frames, { duration, easing, fill: "forwards" });
   try {
     const size = origin.width / flyer.offsetWidth;
-    if (receipt) {
-      const box = receipt.getBoundingClientRect();
-      const pickupX = box.left + box.width * .46;
-      const pickupY = box.top - 30;
-      await animate(flyer, [at(x,y,size), at(x+55,y-20,1,-7), at(pickupX,pickupY,.85,10)], 700).finished;
-      const slip = document.createElement("div");
-      slip.className = "courier-slip";
-      slip.textContent = receipt.innerText;
-      flyer.append(slip);
-      const paperX = (box.left - pickupX) / .85 - slip.offsetLeft;
-      const paperY = (box.top - pickupY) / .85 - slip.offsetTop;
-      const fold = animate(slip, [at(paperX,paperY,box.width / (slip.offsetWidth * .85)),
-        at(0,0,1,18)], 320);
-      receipt.animate([{opacity:1},{opacity:0,transform:"scale(.82)"}], {duration:180,fill:"forwards"});
-      await fold.finished;
-      x = pickupX; y = pickupY;
-    }
     const edgeX = innerWidth + 90;
     const edgeY = Math.max(22, y - 64);
     const leave = animate(from, [{opacity:1}, {opacity:1,offset:.56}, {opacity:0,transform:"translateX(-14px)"}], 1320, "linear");
     const lift = Math.max(8, y - 34);
     // Spend the first beat close to the buyer, then accelerate across the screen.
     await animate(flyer, [
-      { ...at(x,y,receipt ? .85 : size), easing:"ease-in-out" },
-      { ...at(x+34,lift,receipt ? .87 : size*.92,-7), offset:.52, easing:"ease-in" },
+      { ...at(x,y,size), easing:"ease-in-out" },
+      { ...at(x+34,lift,size*.92,-7), offset:.52, easing:"ease-in" },
       at(edgeX,edgeY,.83,-4),
     ], 1320, "linear").finished;
     arrived = true;

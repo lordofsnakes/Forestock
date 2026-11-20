@@ -69,24 +69,37 @@
     </section>
     <section hidden id="welcome" aria-labelledby="welcomeTitle">
       <div class="chat-heading">
-        <button class="bird portrait" aria-label="Animate the copper-winged sparrow"><span></span></button>
-        <div><h1 id="welcomeTitle">Plan an order</h1><p>Chat with your sparrow</p></div>
+        <h1 id="welcomeTitle">Plan an order</h1>
+        <details id="chatDraft" hidden>
+          <summary>Your draft</summary>
+          <div class="draft-terms">
+            <span id="draftNeeds"></span>
+            <span id="draftAllowance"></span>
+          </div>
+        </details>
       </div>
-      <div class="receipt">
-        <div class="receipt-head"><strong>Purchase request</strong><span>Draft</span></div>
-        <div class="draft-terms" aria-live="polite">
-          <span id="receiptNeed">Material pending</span>
-          <span id="receiptLimit">Weekly allowance pending</span>
-        </div>
-        <div id="messages" role="log" aria-label="Setup conversation" aria-live="polite"></div>
-        <div class="reply-area">
-          <div id="suggestions" aria-label="Suggested replies"></div>
-          <form id="setup" autocomplete="off">
-            <input name="reply" aria-label="Your message" maxlength="1000" required />
-            <button class="primary">Send</button>
-          </form>
-          <button id="restart" type="button" hidden>Start over</button>
-        </div>
+      <button class="bird portrait" aria-label="Animate the copper-winged sparrow">
+        <span>
+          <svg viewBox="0 0 480 480" aria-hidden="true" focusable="false">
+            <defs>
+              <clipPath id="lower-bill-clip">
+                <path d="M219 144 Q238 158 259 144 Q256 155 245 170 Q240 177 235 171 Q224 157 219 144Z"/>
+              </clipPath>
+            </defs>
+            <image href="/sparrow-front.png" width="480" height="480"/>
+            <path class="mouth-opening" fill="#49281e" d="M219 144 Q239 158 259 144 Q256 160 246 169 Q239 176 232 168 Q224 160 219 144Z"/>
+            <g class="lower-bill"><image href="/sparrow-front.png" width="480" height="480" clip-path="url(#lower-bill-clip)"/></g>
+          </svg>
+        </span>
+      </button>
+      <div id="messages" role="log" aria-label="Conversation with your sparrow" aria-live="polite" aria-relevant="additions"></div>
+      <div class="reply-area">
+        <div id="suggestions" aria-label="Suggested replies"></div>
+        <form id="setup" autocomplete="off">
+          <input name="reply" aria-label="Your message" maxlength="1000" required />
+          <button class="primary">Send</button>
+        </form>
+        <button id="restart" type="button" hidden>Start over</button>
       </div>
     </section>
     <main hidden id="app" aria-live="polite">Loading orders…</main>

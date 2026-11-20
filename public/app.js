@@ -62,7 +62,7 @@ let addingNeed = false;
 const welcome = document.querySelector("#welcome");
 let inSetup = true;
 function finishSetup(lines, allowance) {
-  flyToScreen(welcome, el, ".order-bird", () => openOrder(lines, allowance), welcome.querySelector(".draft-terms"));
+  flyToScreen(welcome, el, ".order-bird", () => openOrder(lines, allowance));
 }
 function openOrder(lines, allowance) {
   const previous = order();

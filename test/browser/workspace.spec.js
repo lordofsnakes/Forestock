@@ -271,7 +271,7 @@ test("multiple needs survive a reload and settle against one shared balance", as
   await expect(page.locator(".row").filter({ hasText: "Funds held" })).toContainText("$0.00");
 });
 
-test("the sparrow carries the buyer’s completed slip into the orders screen", async ({ page }) => {
+test("the sparrow flies from the conversation to the reviewed orders", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await expect(button(page, "Continue with demo balance")).toBeHidden();
@@ -282,7 +282,7 @@ test("the sparrow carries the buyer’s completed slip into the orders screen", 
   await button(page, "100 MMBtu").click();
   await button(page, "600 USDC").click();
   await button(page, "Review order").click();
-  await expect(page.locator(".courier-slip")).toContainText("100 MMBtu of Natural Gas");
+  await expect(page.locator(".courier")).toBeAttached();
   await expect(page.getByRole("heading", { name: "Active needs" })).toBeFocused();
   await expect(page.locator(".courier")).toHaveCount(0);
   await expect(page.locator(".need-entry")).toHaveCount(1);
@@ -313,8 +313,9 @@ test("a returning buyer can clarify a mixed-material request and review all thre
     } } });
   });
   await send(page, "I need 100mg of copper by the end of this week, and also a bit of oil and gold as well");
-  await expect(log.locator(".helper").last().getByRole("img", { name: "Sparrow" })).toBeVisible();
-  await expect(page.locator("#receiptNeed")).toHaveText("Copper\noil\nGold");
+  await expect(log.locator(".helper").last().locator(".sr-only")).toContainText("Sparrow:");
+  await page.getByText("Your draft", { exact: true }).click();
+  await expect(page.locator("#draftNeeds")).toHaveText("Copper\noil\nGold");
   await expect(button(page, "Review order")).toHaveCount(0);
   await send(page, "Make it 1 lb copper by February 5 2027, 2 bbl Brent and 3 troy oz gold. 3000 USDC/week.");
   await button(page, "Review order").click();
@@ -323,4 +324,30 @@ test("a returning buyer can clarify a mixed-material request and review all thre
   const date = await page.evaluate(() => new Date("2027-02-05T23:59:00").getTime());
   expect(state.orders[1].due).toBe(date);
   expect(state.limit).toBe(300000);
+});
+
+test("the sparrow's beak follows the visible words of an AI reply and rests afterward", async ({ page }) => {
+  const reply = "I have your copper request. When should it arrive?";
+  await page.route("**/api/chat", route => route.fulfill({ json: {
+    reply, draft: { series: "COPPER", quantity: 25, allowance: null },
+  } }));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await button(page, "Manual setup").click();
+  await button(page, "Continue with demo balance").click();
+  await expect(page.locator(".portrait.speaking")).toBeVisible();
+  await send(page, "I need 25 lb of copper");
+  const last = page.locator("#messages .helper").last();
+  await expect(last.locator(".sr-only")).toHaveText("Sparrow: " + reply);
+  await expect(last.locator(".spoken-word").first()).toBeVisible();
+  const motion = await page.locator(".lower-bill").evaluate(el => el.getAnimations().map(a => a.effect.getKeyframes()));
+  expect(motion.flat().some(frame => frame.transform === "translateY(14px)")).toBe(true);
+  await expect(page.locator(".portrait.speaking")).toHaveCount(0);
+  await expect(last.locator(".speech")).toHaveText(reply);
+  await expect(page.locator(".lower-bill")).toHaveCSS("transform", "none");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await send(page, "Can you repeat that?");
+  await expect(page.locator(".helper")).toHaveCount(3);
+  await expect(page.locator(".helper").last().locator(".speech")).toHaveText(reply);
+  await expect(page.locator(".portrait.speaking, .spoken-word")).toHaveCount(0);
 });
