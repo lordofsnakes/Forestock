@@ -1,4 +1,4 @@
-import { escapeText as esc, filterControls, populateFilters, matchesOrder, purchaseMark, marketSection, showMarket, syncAmountSlider, thresholdHint } from "./workspace-controls.js";
+import { escapeText as esc, filterControls, populateFilters, matchesOrder, purchaseMark, orderForecast, syncAmountSlider } from "./workspace-controls.js";
 import { openStep } from "./navigation.js";
 import { flyToScreen, flyToArcReview, hop } from "./onboarding-motion.js";
 import { startChat } from "./setup-chat.js";
@@ -198,15 +198,10 @@ function assessment({ market, replay }, t = now()) {
   return evaluate({ ...s, order: order() }, market, t, replay ? Date.parse(market.observed) : t);
 }
 const orderFilter = { material: "", status: "" };
-let forecastSeries;
 const practiceStatuses = [["Watching", "Watching"], ["Held", "Funds held"], ["Paid", "Purchased"], ["Refunded", "Refunded"]];
 function fillOverview() {
   const materials = new Map(s.orders.map(o => [(o.asset || copper).series, (o.asset || copper).name]));
   populateFilters(el, materials, practiceStatuses, orderFilter);
-  const series = forecastSeries || current().series;
-  const asset = choices().find(a => a.series === series) || current();
-  const { market, replay } = forecast(now(), asset.series, asset.series === current().series && order().preferRecording);
-  showMarket(el, choices(), asset.series, market, replay);
 }
 function needsOverview(matches) {
   const active = matches.filter(o => o.status === "Watching" || o.status === "Held");
@@ -225,7 +220,7 @@ function needsOverview(matches) {
 }
 // Keep each button attached to the exact snapshot the buyer saw, even at expiry.
 let marketNotes = [];
-function sparrowUpdates() {
+function sparrowUpdates(ready) {
   const selectedSeries = current().series;
   const timestamp = now();
   marketNotes = assets.flatMap(asset => {
@@ -243,7 +238,7 @@ function sparrowUpdates() {
     Number(a.series === selectedSeries) - Number(b.series === selectedSeries));
   if (!marketNotes.length) marketNotes.push({ label: "Market update", text: "I don’t have a qualifying quote yet. Ask me about your order timing." });
   return '<aside class="market-updates" aria-label="Market updates from the sparrow">' +
-    '<button class="bird order-bird" data-note="0" aria-label="Chat with the sparrow"><span></span></button>' +
+    '<button class="bird order-bird' + (ready ? " ready-dance" : "") + '" data-note="0" aria-label="Chat with the sparrow"><span></span></button>' +
     '<div><h3>Ask the sparrow</h3>' + marketNotes.slice(0, 2).map((note, i) =>
       '<button class="market-bubble" data-note="' + i + '"><small>' + esc(note.label) +
       '</small><span>' + esc(note.text) + '</span></button>').join("") + '</div></aside>';
@@ -305,7 +300,7 @@ function orderActions(decision, total) {
 function render(check, savedThreshold = false) {
   if (inSetup) return;
   const expanded = new Set(
-    [...el.querySelectorAll("details[open] summary")].map((n) => n.textContent),
+    [...el.querySelectorAll("details[open] > summary")].map((n) => (n.parentElement.dataset.owner || "") + n.textContent),
   );
   refresh(s, now());
   const matches = s.orders.filter(o => matchesOrder(orderFilter, (o.asset || copper).series, o.status));
@@ -321,7 +316,7 @@ function render(check, savedThreshold = false) {
     b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
   if (tab === "Orders") {
     if (!matches.length) {
-      el.innerHTML = needsOverview(matches) + marketSection();
+      el.innerHTML = needsOverview(matches);
       fillOverview();
       return;
     }
@@ -358,7 +353,8 @@ function render(check, savedThreshold = false) {
         : o.replayObserved && !open ? "Simulated purchase · Used forecast recorded " + dt(o.replayObserved)
         : "Simulated purchase") + "</p>" +
       (open ? '<button class="threshold-setting" data-action="threshold"><span>Early-order threshold <strong>' +
-        thresholdFor(o) + '%</strong></span><span>Change</span></button><p class="hint">' + thresholdHint + '</p>' : "") +
+        thresholdFor(o) + '%</strong></span><span>Change</span></button>' +
+        orderForecast({id:o.id, asset:current(), market, recorded:replay, threshold:thresholdFor(o), cap:o.cap, cutoff:o.due-day, practice:true}) : "") +
       (open && source.canSwitch ? '<button class="forecast-switch" data-action="forecast">' +
         (replay ? "Use live forecast" : "Use recorded forecast") + "</button>" : "") +
       '<div class="actions">' +
@@ -376,7 +372,7 @@ function render(check, savedThreshold = false) {
           btn("Simulate ordering at the deadline", "cutoff") +
           "</details>"
         : "") +
-      '</section>' + sparrowUpdates() + '<section class="card order-summary"><h2>' + esc(name) + '</h2>' +
+      '</section>' + sparrowUpdates(open && d.kind === "Buy") + '<section class="card order-summary"><h2>' + esc(name) + '</h2>' +
       row("Quantity", o.qty + " " + esc(unit)) +
       row("Order total", money(total)) +
       row("Order by", dt(o.due - day)) +
@@ -386,7 +382,7 @@ function render(check, savedThreshold = false) {
       row("Delivered price",money(price)+" / "+esc(unit)) +
       row("Maximum price",money(o.cap)+" / "+esc(unit)) +
       row("Needed by",dt(o.due)) +
-      '</details></section>' + marketSection();
+      '</details></section>';
     fillOverview();
   } else if (tab === "Budget") {
     el.innerHTML =
@@ -431,7 +427,7 @@ function render(check, savedThreshold = false) {
       chainReceipts();
   }
   for (const detail of el.querySelectorAll("details"))
-    if (expanded.has(detail.querySelector("summary")?.textContent))
+    if (expanded.has((detail.dataset.owner || "") + detail.querySelector("summary")?.textContent))
       detail.open = true;
 }
 el.addEventListener("change", event => {
@@ -440,9 +436,6 @@ el.addEventListener("change", event => {
     orderFilter[select.dataset.filter] = select.value;
     render();
     el.querySelector('[data-filter="' + select.dataset.filter + '"]').focus({preventScroll: true});
-  } else if (select.hasAttribute("data-market-material")) {
-    forecastSeries = select.value;
-    fillOverview();
   }
 });
 const tabs = [...document.querySelectorAll("nav [data-tab]")].map(button => button.dataset.tab);
@@ -497,7 +490,6 @@ document.addEventListener("click", async (e) => {
   }
   if (b.dataset.need) {
     s.selectedId = b.dataset.need;
-    forecastSeries = undefined;
     fillPickers();
     render();
     el.querySelector('.need-entry[aria-pressed="true"]').focus({ preventScroll: true });
@@ -653,7 +645,6 @@ form.addEventListener("submit", (e) => {
     status: "Watching",
   };
   orderFilter.material = orderFilter.status = "";
-  forecastSeries = undefined;
   if (addingNeed) s.orders.push(need);
   else s.orders[s.orders.indexOf(order())] = need;
   s.selectedId = need.id;

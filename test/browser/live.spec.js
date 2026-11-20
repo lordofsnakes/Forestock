@@ -199,7 +199,7 @@ test("live copper chat explains a waiting order and offers a different next ques
     return route.fulfill({json: {reply: "Your copper order stays open while the agent watches for a stronger signal."}});
   });
   await enterSavedOrders(page);
-  const board = page.getByRole("region", {name:"Gemini prediction markets"});
+  const board = page.getByRole("region", {name:"Copper prediction market"});
   await expect(board).toContainText("Gemini · Live");
   await expect(board).toContainText("25.5%");
   await page.getByRole("button", {name: "Ask about this order"}).click();
@@ -251,7 +251,7 @@ test("reopening a standalone app returns to onboarding", async ({page}) => {
   await expect(page.getByRole("heading", {name: "Let’s plan a purchase"})).toBeVisible();
 });
 
-test("order filters keep markets visible, purchases get icons, and sliders preview the budget", async ({page}) => {
+test("order filters show only the matching order’s market, purchases get icons, and sliders preview the budget", async ({page}) => {
   await page.emulateMedia({reducedMotion:"reduce"});
   const buyer = "0x" + "12".repeat(20);
   const [paid, waiting, refunded] = ["10","20","30"].map(n => "0x" + n.repeat(32));
@@ -267,14 +267,14 @@ test("order filters keep markets visible, purchases get icons, and sliders previ
       status:id === paid ? 3 : id === waiting ? 1 : 4, holdTime:0n, holdBlock:0n, settlementBlock:0n, amount:0n}),
   });
   await enterSavedOrders(page);
-  const board = page.getByRole("region",{name:"Gemini prediction markets"});
-  await expect(page.locator("#speedHint")).toBeVisible();
+  const board = page.getByRole("region",{name:"Copper prediction market"});
+  await expect(board).toBeVisible();
+  await expect(board).toContainText("Gemini · Recorded");
+  await expect(board).toContainText("Reference only");
   await page.getByRole("combobox",{name:"Material",exact:true}).selectOption("XAU");
   await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("1");
   await expect(page.getByText("No orders match these filters.")).toBeVisible();
-  await expect(board).toContainText("Gemini · Recorded");
-  await page.getByLabel("Forecast material").selectOption("BRENT");
-  await expect(board).toContainText("Oil (Brent) price");
+  await expect(board).toHaveCount(0);
   await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("3");
   await expect(page.locator("#orderList article:visible")).toHaveCount(1);
   await expect(page.locator("#orderList article:visible")).toContainText("Gold");
@@ -292,7 +292,7 @@ test("order filters keep markets visible, purchases get icons, and sliders previ
   await expect(page.locator("#balances")).toContainText(" / 1 test USDC");
   await page.getByRole("button",{name:"Orders",exact:true}).click();
   await expect(page.locator("#orderList article:visible")).toHaveCount(1);
-  await expect(board).toContainText("Oil (Brent) price");
+  await expect(board).toHaveCount(0);
 });
 
 test("cross-chain review signs the cheaper delivered offer and the fee cap in one batch", async ({page}) => {
@@ -326,4 +326,49 @@ test("cross-chain review signs the cheaper delivered offer and the fee cap in on
   expect(calls.every(c=>c.to===network.routed.escrow)).toBeTruthy();
   expect(calls.map(c=>decodeFunctionData({abi,data:c.data}).functionName)).toEqual(["configure","plan","selectBase"]);
   expect(decodeFunctionData({abi,data:calls[2].data}).args.slice(1)).toEqual([520,60000n]);
+});
+
+test("the sparrow dances only for eligible orders and forecast details stay with their order", async ({page}) => {
+  const buyer = "0x" + "12".repeat(20);
+  const [copper, gas] = ["34","56"].map(n => "0x" + n.repeat(32));
+  const now = Date.now(), cutoff = BigInt(Math.floor(now/1000)+86400);
+  const asset = JSON.parse(fs.readFileSync("public/commodities.json")).assets.find(a=>a.series==="COPPER");
+  asset.market = {...asset.market, observed:new Date(now), expiry:new Date(now+3600000), contracts:[
+    {strike:5.7,bid:.15,ask:.17},{strike:6,bid:.49,ask:.51}
+  ]};
+  await page.addInitScript(b=>localStorage.setItem("forestock.arcWallet",b),buyer);
+  await page.route("**/api/market",r=>r.fulfill({json:{assets:[asset]}}));
+  let free = parseEther("1"), gasCutoff = cutoff;
+  await mockArc(page,()=>"1",{list:[copper,gas],weeklyLimit:parseEther("1"),free:()=>free,
+    order:id=>({buyer,series:toHex(id===gas?"NGAS":"COPPER",{size:32}),quantityMilli:10,capCents:610,orderBy:id===gas?gasCutoff:cutoff,
+      threshold:10,allowRecording:false,status:1,holdTime:0n,holdBlock:0n,settlementBlock:0n,amount:0n})});
+  await page.emulateMedia({reducedMotion:"no-preference"});
+  await enterSavedOrders(page);
+  const card=page.locator('[data-order="'+copper+'"]');
+  const other=page.locator('[data-order="'+gas+'"]');
+  await expect(other.getByRole("region",{name:"Natural Gas prediction market"})).toBeVisible();
+  await expect(other.locator(".ready-dance")).toHaveCount(0);
+  await expect(card.locator(".forecast-line")).toContainText("16%");
+  const toggle=card.getByText("When will this buy?");
+  await toggle.click();
+  await expect(card.getByText(/reaches 10%/)).toBeVisible();
+  await expect(card.getByText(/final 30 seconds/)).toBeVisible();
+  const bird=card.locator(".order-bird span");
+  await expect(bird).toHaveCSS("animation-name","sparrow-dance");
+  await page.emulateMedia({reducedMotion:"reduce"});
+  await expect(bird).toHaveCSS("animation-name","none");
+  free=0n;
+  await page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+  await expect(card.locator(".ready-dance")).toHaveCount(0);
+  await expect(card.getByText(/reaches 10%/)).toBeVisible();
+  await expect(other.locator('[data-disclosure="rules"]')).not.toHaveAttribute("open","");
+  free = parseEther("1");
+  gasCutoff = BigInt(Math.floor(Date.now()/1000) + 25);
+  await page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+  await expect(other.locator(".ready-dance")).toBeVisible();
+  await expect(other).toContainText("Final ordering window open");
+  gasCutoff -= 60n;
+  await page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+  await expect(other.locator(".ready-dance")).toHaveCount(0);
+  await expect(other).toContainText("deadline has passed");
 });

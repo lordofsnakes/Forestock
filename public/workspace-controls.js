@@ -1,10 +1,8 @@
-import { midpointPercent } from "./decision.js";
+import { midpointPercent, watchedContract, liveCutoffWindowSeconds } from "./decision.js";
 
 export const escapeText = value => String(value).replace(/[&<>"']/g, c => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[c]);
-
-export const thresholdHint = "Want to order sooner? Lower the threshold so a smaller forecast probability can trigger an early order. Your price and budget limits still apply.";
 
 const marks = new Map([
   ["COPPER", ["Cu", "copper"]], ["XAG", ["Ag", "silver"]], ["XAU", ["Au", "gold"]],
@@ -39,35 +37,34 @@ export function matchesOrder(filter, series, status) {
   return (!filter.material || filter.material === series) && (!filter.status || filter.status === status);
 }
 
-export function marketSection() {
-  return '<section class="market-board card" aria-label="Gemini prediction markets"><div class="needs-heading"><h2>Prediction markets</h2>' +
-    '<select data-market-material aria-label="Forecast material"></select></div><div data-market-quotes></div></section>';
-}
+const stamp = t => new Date(t).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
 
-export function showMarket(root, assets, selected, market, recorded) {
-  const picker = root.querySelector("[data-market-material]");
-  updateChoices(picker, assets.map(a => [a.series, a.name]), selected);
-  const asset = assets.find(a => a.series === selected);
-  const box = root.querySelector("[data-market-quotes]");
-  let html = "<p>No two-sided forecast is available for this material yet.</p>";
-  if (market?.contracts?.length) {
-    const stamp = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    const contracts = [...market.contracts].sort((a, b) => a.strike - b.strike);
-    const featured = contracts.reduce((best, c) => Math.abs(midpointPercent(c) - 50) < Math.abs(midpointPercent(best) - 50) ? c : best);
-    const row = c => '<div class="market-strike"><span>$' + c.strike.toLocaleString("en-US", {maximumFractionDigits: 4}) +
-      ' / ' + escapeText(asset?.unit || "unit") + ' or higher</span><span><strong>' + midpointPercent(c) +
-      '%</strong><small>Bid ' + Math.round(c.bid * 100) + '¢ · Ask ' + Math.round(c.ask * 100) + '¢</small></span></div>';
-    html = '<p class="hint">Gemini · ' + (recorded ? "Recorded" : "Live") + ' · ' + stamp(market.observed) + '</p>' +
-      '<p>' + escapeText(market.title || asset?.name || "Forecast") + '<br><small>At expiry on ' + stamp(market.expiry) + '</small></p>' + row(featured) +
-      (contracts.length > 1 ? '<details><summary>Other price levels (' + (contracts.length - 1) + ')</summary>' +
-        contracts.filter(c => c !== featured).map(row).join("") + '</details>' : "");
-  }
-  if (box.dataset.content === html) return;
-  const open = box.querySelector("details")?.open && box.dataset.series === selected;
-  box.innerHTML = html;
-  box.dataset.content = html;
-  box.dataset.series = selected;
-  if (open && box.querySelector("details")) box.querySelector("details").open = true;
+export function orderForecast({id, asset, market, recorded, threshold, cap, cutoff, practice, allowRecording, feeCap}) {
+  const name = escapeText(asset.name);
+  const unit = escapeText(asset.unit || "unit");
+  const strike = c => "$" + c.strike.toLocaleString("en-US", {maximumFractionDigits:4});
+  const contract = watchedContract(asset, market);
+  const source = market ? "Gemini · " + (recorded ? "Recorded" : "Live") + " · " + stamp(market.observed) : "Gemini · Forecast unavailable";
+  const target = contract ? name + " at " + strike(contract) + "/" + unit + " or higher" : "";
+  const headline = contract ? '<div class="forecast-line"><span>' + target + '</span><strong>' + midpointPercent(contract) + '%</strong></div>' : "";
+  const early = (practice ? "Your practice order is ready" : "The agent can reserve funds") + " when " +
+    (contract ? "the probability of " + target + " reaches " + threshold + "%" : "a qualifying " + name + " forecast shows at least " + threshold + "%") +
+    " and the forecast’s time to expiry fits the remaining order window.";
+  const deadline = practice ? "At the " + stamp(cutoff) + " cutoff, you can place the practice order regardless of the forecast." :
+    "In the final " + liveCutoffWindowSeconds + " seconds before " + stamp(cutoff) + ", the agent can reserve funds regardless of the forecast.";
+  const limits = "The supplier must have stock at or below $" + (cap / 100).toFixed(2) + "/" + unit +
+    ", and the order must fit your " + (practice ? "demo balance" : "available escrow") + " and remaining weekly allowance.";
+  const levels = (market?.contracts || []).slice().sort((a,b) => a.strike - b.strike).map(c =>
+    '<div class="market-strike"><span>' + strike(c) + '/' + unit + ' or higher</span><span><strong>' + midpointPercent(c) +
+    '%</strong><small>Bid ' + Math.round(c.bid*100) + '¢ · Ask ' + Math.round(c.ask*100) + '¢</small></span></div>').join("");
+  return '<section class="order-forecast" aria-label="' + name + ' prediction market"><small>' + source +
+    (market && recorded && !practice && !allowRecording ? ' · Reference only' : '') + '</small>' + headline +
+    '<details data-disclosure="rules" data-owner="' + escapeText(id) + '"><summary>When will this buy?</summary><p>' + early +
+    ' Lower the threshold to qualify sooner.</p><p>' + deadline + ' ' + limits + '</p>' +
+    (!practice ? '<p>' + (allowRecording ? 'A dated forecast may be used when live data is unavailable.' : 'Early buying requires a live forecast.') +
+      (feeCap ? ' The Base forwarding fee must fit your signed fee limit.' : '') + ' The supplier receives payment after accepting the order.</p>' : '') +
+    (levels ? '<details data-disclosure="prices" data-owner="' + escapeText(id) + '"><summary>Market prices and odds</summary><p>' +
+      escapeText(market.title || name) + ' · Expires ' + stamp(market.expiry) + '</p>' + levels + '</details>' : '') + '</details></section>';
 }
 
 export function syncAmountSlider(range, field, max) {

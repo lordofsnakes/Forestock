@@ -24,7 +24,7 @@ import {
   waitEscrowOperation,
 } from "../public/generated/circle.js";
 
-import { escapeText as escape, filterControls, populateFilters, matchesOrder, purchaseMark, marketSection, showMarket, syncAmountSlider, thresholdHint } from "../public/workspace-controls.js";
+import { escapeText as escape, filterControls, populateFilters, matchesOrder, purchaseMark, orderForecast, syncAmountSlider } from "../public/workspace-controls.js";
 
 const abi = [...liveAbi,...routeAbi];
 let routed, book, fee, feeTime = 0, baseSupplier;
@@ -79,48 +79,27 @@ function planReceipt(id) {
 const orders = new Map();
 const statusLabels = ["", "Watching", "Funds held", "Purchased", "Refunded", "Cancelled", "Payment in transit"];
 const filter = { material: "", status: "" };
-let marketSeries, budgetEdited = false;
+let budgetEdited = false;
+let lastOrderMarkup;
 $("arcFilters").innerHTML = filterControls();
-$("arcMarkets").innerHTML = marketSection();
-$("speedHint").textContent = thresholdHint;
 $("fund").oninput = () => { budgetEdited = true; };
 function filterOrders() {
   const materials = new Map();
-  let visible = 0, watching = false;
+  let visible = 0;
   for (const card of $("orderList").querySelectorAll("article")) {
     const { series, status, name } = card.dataset;
     materials.set(series, name);
     card.hidden = !matchesOrder(filter, series, status);
-    if (!card.hidden) {
-      visible++;
-      if (status === "1") watching = true;
-    }
+    if (!card.hidden) visible++;
   }
   populateFilters($("arcFilters"), materials, statusLabels.slice(1).map((s,i) => [String(i + 1), s]), filter);
   $("arcFilters").hidden = materials.size === 0;
-  $("speedHint").hidden = !watching;
   const empty = $("noMatches");
   if (empty) empty.hidden = visible > 0;
 }
 $("arcFilters").onchange = event => {
   filter[event.target.dataset.filter] = event.target.value;
   filterOrders();
-  renderMarkets();
-};
-function renderMarkets() {
-  const assets = new Map((catalog || []).map(a => [a.series, a]));
-  for (const asset of liveAssets) assets.set(asset.series, asset);
-  if (!assets.size) return;
-  const series = marketSeries || filter.material || draft?.lines?.[0]?.series || $("orderList").querySelector("article")?.dataset.series;
-  const asset = assets.get(series) || assets.values().next().value;
-  const live = liveAssets.find(a => a.series === asset.series)?.market;
-  const fresh = currentQuote(live, Date.now());
-  showMarket($("arcMarkets"), [...assets.values()], asset.series,
-    fresh ? live : catalog?.find(a => a.series === asset.series)?.market, !fresh);
-}
-$("arcMarkets").onchange = event => {
-  marketSeries = event.target.value;
-  renderMarkets();
 };
 let view = "orders",
   editingId;
@@ -380,7 +359,8 @@ async function orderCard(id, o) {
     const gross = totalCents(o.quantityMilli/1000,baseUnit)*10000;
     if (!fee || requiredFee(gross,fee) > Number(feeCap))
       assessment = {kind:"Wait",reason:fee ? "Waiting for Circle’s forwarding fee to fit your signed offer." : "Waiting for a forwarding fee from Circle."};
-    else if (!book?.unitCents[series] || book.expires*1000 < Date.now())
+    else if (!book?.unitCents[series] || book.expires*1000 < Date.now() || o.quantityMilli/1000 > book.stock ||
+      gross - Number(feeCap) < totalCents(o.quantityMilli/1000,book.unitCents[series])*10000)
       assessment = {kind:"Wait",reason:"Waiting for a valid supplier quote for your Base order."};
   }
   orders.set(id, {
@@ -390,14 +370,17 @@ async function orderCard(id, o) {
     recording: archived?.market,
     assessment, mintLink, status,
   });
-  let body = assessment
-    ? "<p>" +
-      escape(assessment.recorded ? "Recorded forecast. " : "") +
-      escape(assessment.reason) +
-      "</p>"
-    : "";
-  if (o.status === 1)
-    body +=
+  let body = "";
+  if (assessment) {
+    const fresh = currentQuote(live?.market, Date.now());
+    const market = fresh ? live.market : archived?.market;
+    const message = assessment.kind === "Buy"
+      ? (assessment.contract ? "Forecast trigger met. Ready for the agent to reserve funds." : "Final ordering window open. Ready for the agent to reserve funds.")
+      : assessment.contract ? "Waiting for the forecast to reach " + o.threshold + "%." : assessment.reason;
+    body = "<p>" + escape(message) + "</p>" + orderForecast({
+      id, asset:asset || {name:series, series}, market, recorded:!fresh, threshold:o.threshold,
+      cap:o.capCents, cutoff:Number(o.orderBy)*1000, allowRecording:o.allowRecording, feeCap
+    }) +
       '<button data-change="' +
       id +
       '" data-value="' +
@@ -407,8 +390,9 @@ async function orderCard(id, o) {
       '% threshold</button> <button data-cancel="' +
       id +
       '">Cancel need</button>';
+  }
   body +=
-    '<div class="market-updates"><button class="bird order-bird" data-chat="' +
+    '<div class="market-updates"><button class="bird order-bird' + (assessment?.kind === "Buy" ? ' ready-dance' : '') + '" data-chat="' +
     id +
     '" aria-label="Chat with the sparrow"><span></span></button><button class="market-bubble" data-chat="' +
     id +
@@ -420,7 +404,7 @@ async function orderCard(id, o) {
     blockReceipt(id, o.settlementBlock, "Settled", o.status === 6),
   ]);
   return (
-    '<article data-series="' + escape(series) + '" data-status="' + (mint ? 3 : o.status) + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
+    '<article data-order="' + id + '" data-series="' + escape(series) + '" data-status="' + (mint ? 3 : o.status) + '" data-name="' + escape(asset?.name || series) + '"><h3>' +
     escape(asset?.name || series) +
     " · " +
     escape(status) +
@@ -485,10 +469,21 @@ async function refresh() {
     const cards = await Promise.all(
       ids.reverse().map(async (id) => orderCard(id, await read("order", [id]))),
     );
-    $("orderList").innerHTML =
-      cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
+    const markup = cards.length ? cards.join("") + '<p id="noMatches" hidden>No orders match these filters.</p>' : "<p>Your authorized orders will appear here.</p>";
+    if (markup !== lastOrderMarkup) {
+      const list = $("orderList");
+      const open = new Set([...list.querySelectorAll("details[open]")].map(d => d.dataset.owner + d.dataset.disclosure));
+      const focus = document.activeElement;
+      const parent = focus?.closest("[data-disclosure]");
+      list.innerHTML = markup;
+      lastOrderMarkup = markup;
+      for (const d of list.querySelectorAll("details")) {
+        d.open = open.has(d.dataset.owner + d.dataset.disclosure);
+        if (focus?.tagName === "SUMMARY" && parent?.dataset.owner === d.dataset.owner && parent.dataset.disclosure === d.dataset.disclosure)
+          d.querySelector("summary").focus({preventScroll:true});
+      }
+    }
     filterOrders();
-    renderMarkets();
     $("events").innerHTML =
       ids
         .filter((id) => orders.get(id).o.status === 3 || planReceipt(id) || receipts.has(id + "Held") || receipts.has(id + "Settled"))
@@ -772,7 +767,6 @@ async function start() {
     ].map(async (path) => (await fetch(path)).json()),
   );
   catalog = materials.assets;
-  renderMarkets();
   if (
     network.chainId !== 5042002 ||
     !isAddress(network.escrow || "") ||

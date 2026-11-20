@@ -99,7 +99,10 @@ test("upstream failure displays dated replay and commodity-specific thresholds",
     route.fulfill({ status: 503, body: "unavailable" }),
   );
   await start(page, "XAG");
-  await expect(page.getByRole("region", {name: "Gemini prediction markets"})).toContainText("Gemini · Recorded");
+  const market = page.locator(".order-status").getByRole("region", {name: "Silver prediction market"});
+  await expect(market).toContainText("Gemini · Recorded");
+  await market.getByText("When will this buy?").click();
+  await market.getByText("Market prices and odds").click();
   await expect(page.getByText(/Silver price on/)).toBeVisible();
 });
 test("live data advances an eligible order and supplier acceptance persists", async ({

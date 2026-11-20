@@ -2,6 +2,7 @@ export const price = 580,
   premium = 12,
   day = 86400000;
 export const defaultThreshold = 10;
+export const liveCutoffWindowSeconds = 30;
 export const minimumQuantity = .001;
 export function defaultQuantity(asset) {
   return asset.price > 50000 ? minimumQuantity : .01;
@@ -31,10 +32,15 @@ export function currentQuote(market, time) {
 export function midpointPercent(contract) {
   return Number(((contract.bid + contract.ask) * 50).toFixed(8));
 }
+// The order watches the lowest strike whose delivered price would exceed its supplier quote.
+export function watchedContract(asset, market) {
+  if ((market?.series ?? "COPPER") !== (asset?.series ?? "COPPER")) return;
+  return market?.contracts?.filter(c => c.strike * 100 + (asset?.premium ?? 12) > (asset?.price ?? 580))
+    .sort((a, b) => a.strike - b.strike)[0];
+}
 export function evaluate(s, m, t, marketTime = t) {
   const o = s.order,
     price = o.asset?.price ?? 580,
-    premium = o.asset?.premium ?? 12,
     total = totalCents(o.qty, price);
   const block = (reason, fix = "edit") => ({ kind: "Blocked", reason, fix });
   if (s.paused) return block("Your purchasing allowance is paused.", "budget");
@@ -53,10 +59,7 @@ export function evaluate(s, m, t, marketTime = t) {
       kind: "Buy",
       reason: "The supplier needs 24 hours to deliver. It’s time to order, and the offer meets your terms.",
     };
-  const sameMarket = (m?.series ?? "COPPER") === (o.asset?.series ?? "COPPER");
-  const c = (sameMarket ? m : null)?.contracts
-    .filter((c) => c.strike * 100 + premium > price)
-    .sort((a, b) => a.strike - b.strike)[0];
+  const c = watchedContract(o.asset, m);
   if (!c || !currentQuote(m, marketTime))
     return { kind: "Wait", reason: "There’s no qualifying forecast for this material to compare with your threshold yet." };
   if (Date.parse(m.expiry) - marketTime > cutoff - t)
