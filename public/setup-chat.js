@@ -12,6 +12,8 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   const restart = document.querySelector("#restart");
   const locked = status !== "Watching";
   const history = [];
+  const answered = new Set();
+  const questions = ["How does this affect my order?", "What happens at the deadline?", "What do these odds mean?"];
   let draft, pending, marketId, marketContext, marketFacts;
 
   function say(content, role = "assistant") {
@@ -64,9 +66,11 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     if (marketContext) {
       draftDetails.hidden = true;
       suggestions.replaceChildren();
-      if (!pending) {
+      const question = questions.find(label => !answered.has(label));
+      if (!pending && question) {
         const followUp = document.createElement("button");
-        followUp.textContent = "How does this affect my order?";
+        followUp.type = "button";
+        followUp.textContent = question;
         followUp.onclick = () => { input.value = followUp.textContent; form.requestSubmit(); };
         suggestions.append(followUp);
       }
@@ -152,6 +156,8 @@ export function startChat({ choices, material, quantity, allowance, status, retu
 
   function marketConversation(id, facts, context, orderDraft) {
     resetComposer();
+    const changedQuote = marketId !== id || marketFacts?.quote !== facts.quote;
+    if (changedQuote) answered.clear();
     if (marketId !== id) {
       history.length = 0;
       messages.replaceChildren();
@@ -162,7 +168,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     draft = orderDraft;
     document.querySelector("#backToOrders").hidden = false;
     document.querySelector("#welcomeTitle").textContent = "Market chat";
-    if (history.at(-1)?.content !== facts.quote) say(facts.quote);
+    if (changedQuote) say(facts.quote);
     refreshSuggestions();
   }
 
@@ -208,11 +214,13 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       if (!response.ok) throw Error(result.code || "unavailable");
       if (request !== pending) return;
       if (!marketContext) draft = result.draft;
+      else if (questions.includes(text)) answered.add(text);
       say(result.reply);
     } catch (error) {
       if (request !== pending) return;
       history.pop();
-      say(error.message === "gateway_verification_required"
+      say(marketContext ? "I couldn’t answer that just now. Your question is in the message box to try again."
+        : error.message === "gateway_verification_required"
         ? "AI chat is waiting for Forestock’s Vercel account verification. You can use a suggested reply to continue."
         : "I couldn’t reach AI chat. Send your message again or use a suggested reply.");
       if (!input.value) input.value = text;

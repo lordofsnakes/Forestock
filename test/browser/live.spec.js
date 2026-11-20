@@ -8,6 +8,33 @@ import {
 import { liveAbi as abi } from "../../lib/live-abi.js";
 import fs from "node:fs";
 const network = JSON.parse(fs.readFileSync("public/arc-network.json"));
+async function mockArc(page, getBalance, reads = {}) {
+  await page.route("https://rpc.testnet.arc.network/**", async (r) => {
+    const req = r.request().postDataJSON();
+    let result;
+    if (req.method === "eth_chainId") result = toHex(5042002);
+    if (req.method === "eth_getBlockByNumber")
+      result = {
+        number: "0x40",
+        timestamp: toHex(Math.floor(Date.now() / 1000)),
+        transactions: [],
+      };
+    if (req.method === "eth_getBalance") result = toHex(parseEther(getBalance()));
+    if (req.method === "eth_call") {
+      const { functionName } = decodeFunctionData({
+        abi,
+        data: req.params[0].data,
+      });
+      result = encodeFunctionResult({
+        abi,
+        functionName,
+        result: reads[functionName] ?? (functionName === "list" ? [] : 0n),
+      });
+    }
+    return r.fulfill({ json: { jsonrpc: "2.0", id: req.id, result } });
+  });
+}
+
 test("passkey review submits a funded Arc batch and links the confirmed transaction", async ({
   page,
 }) => {
@@ -51,30 +78,7 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
     }),
   );
   let balance = "0";
-  await page.route("https://rpc.testnet.arc.network/**", async (r) => {
-    const req = r.request().postDataJSON();
-    let result;
-    if (req.method === "eth_chainId") result = toHex(5042002);
-    if (req.method === "eth_getBlockByNumber")
-      result = {
-        number: "0x40",
-        timestamp: toHex(Math.floor(Date.now() / 1000)),
-        transactions: [],
-      };
-    if (req.method === "eth_getBalance") result = toHex(parseEther(balance));
-    if (req.method === "eth_call") {
-      const { functionName } = decodeFunctionData({
-        abi,
-        data: req.params[0].data,
-      });
-      result = encodeFunctionResult({
-        abi,
-        functionName,
-        result: functionName === "list" ? [] : 0n,
-      });
-    }
-    return r.fulfill({ json: { jsonrpc: "2.0", id: req.id, result } });
-  });
+  await mockArc(page, () => balance);
   await page.goto("/arc.html");
   const authorize = page.getByRole("button", {name:"Authorize with passkey"});
   await expect(page.locator("#fundingAddress")).toHaveText(buyer);
@@ -122,4 +126,37 @@ test("the sparrow flies from passkey planning into live order review", async ({p
   await expect(page.locator(".courier")).toHaveCount(0);
   await page.locator("#guide .portrait").click();
   await expect(page.locator("#guide .portrait")).toHaveClass(/flying/);
+});
+
+test("live copper chat explains a waiting order and offers a different next question", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  const buyer = "0x" + "12".repeat(20);
+  const now = Date.now();
+  const copper = JSON.parse(fs.readFileSync("public/commodities.json")).assets.find(a => a.series === "COPPER");
+  copper.market = { ...copper.market, observed: new Date(now).toISOString(), expiry: new Date(now + 3600000).toISOString(),
+    contracts: [{strike: 5.70, bid: .25, ask: .26}] };
+  await page.addInitScript(buyer => localStorage.setItem("forestock.arcWallet", buyer), buyer);
+  await page.route("**/api/market", route => route.fulfill({json: {assets: [copper]}}));
+  await mockArc(page, () => "1", {
+    list: ["0x" + "42".repeat(32)], weeklyLimit: parseEther("1"), free: parseEther("1"),
+    order: {buyer, series: toHex("COPPER", {size: 32}), quantityMilli: 10, capCents: 601,
+      orderBy: BigInt(Math.floor(now / 1000) + 86400), threshold: 50, allowRecording: false,
+      status: 1, holdTime: 0n, holdBlock: 0n, settlementBlock: 0n, amount: 0n},
+  });
+  let turn;
+  await page.route("**/api/chat", route => {
+    turn = route.request().postDataJSON();
+    return route.fulfill({json: {reply: "Your copper order stays open while the agent watches for a stronger signal."}});
+  });
+  await page.goto("/arc.html");
+  await page.getByRole("button", {name: "Ask about this order"}).click();
+  await expect(page.getByRole("log")).toContainText("25.5%");
+  const ask = page.getByRole("button", {name: "How does this affect my order?"});
+  await ask.click();
+  await expect(page.getByRole("log")).toContainText("watches for a stronger signal");
+  expect(turn.marketFacts.impact).toContain("stays open");
+  expect(turn.marketFacts.deadline).toContain("order cutoff");
+  expect(turn.marketContext).toContain("below your 50%");
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole("button", {name: "What happens at the deadline?"})).toBeVisible();
 });

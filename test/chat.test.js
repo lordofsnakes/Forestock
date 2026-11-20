@@ -93,20 +93,41 @@ test("market questions use the displayed facts and retain the original order", a
   assert.equal((await request({ ...body, marketContext: {} })).code, 400);
 });
 
-test("market chat uses the calculated order assessment for threshold comparisons", async t => {
-  const marketFacts = { quote: "Silver was quoted at 42%.", impact: "The copper signal is 71%. This meets your 65% early-order threshold." };
-  const input = { ...body, marketContext: "Copper order", marketFacts };
+test("the copper impact question and a repeated follow-up reach the model with their history", async t => {
   const previous = process.env.AI_GATEWAY_API_KEY;
   process.env.AI_GATEWAY_API_KEY = "test";
   t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
-  const gateway = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: {
-    content: JSON.stringify({ reply: "71% is below 65%." }),
+  const facts = { quote: "Copper at or above $5.70: 25.5%.", impact: "Your order stays open.", deadline: "The cutoff is Nov 21 at noon." };
+  const question = { role: "user", content: "How does this affect my order?" };
+  const messages = [{ role: "assistant", content: facts.quote }, question];
+  const input = { ...body, marketContext: "Arc Testnet. Watching. The signal is below the 50% threshold.", marketFacts: facts, messages };
+  const replies = ["{{impact}} The agent is waiting for a stronger signal.", "{{impact}} The agent is waiting for a stronger signal.", "The deadline is the other trigger. {{deadline}}"];
+  const turns = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    turns.push(JSON.parse(options.body).messages);
+    return Response.json({ choices: [{ message: { content: JSON.stringify({reply: replies.shift()}) } }] });
+  });
+  const first = await request(input);
+  assert.deepEqual(first.data, {reply: facts.impact + " The agent is waiting for a stronger signal.", draft});
+  messages.push({role: "assistant", content: first.data.reply}, question);
+  const second = await request(input);
+  assert.equal(second.data.reply, "The deadline is the other trigger. " + facts.deadline);
+  assert.deepEqual(turns[1].slice(2), messages);
+  assert.equal(turns.length, 3);
+});
+
+test("an unsupported numerical market claim is retried instead of echoing the opening quote", async t => {
+  const previous = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
+  const marketFacts = { quote: "The midpoint was 25.5%.", impact: "Your order stays open." };
+  const input = { ...body, marketContext: "Copper order", marketFacts };
+  const replies = ["25.5% is above 50%.", "{{impact}}", "100% guaranteed.", "100% guaranteed."];
+  t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: {
+    content: JSON.stringify({reply: replies.shift()}),
   } }] }));
-  assert.equal((await request({ ...input, messages: [{ role: "user", content: "How does this affect my order?" }] })).data.reply, marketFacts.impact);
-  assert.equal(gateway.mock.callCount(), 0);
-  const answer = (await request(input)).data.reply;
-  assert.match(answer, /midpoint of the bid and ask/);
-  assert.ok(answer.endsWith(marketFacts.quote + " " + marketFacts.impact));
+  assert.equal((await request(input)).data.reply, marketFacts.impact);
+  assert.equal((await request(input)).code, 503);
 });
 
 test("the sparrow accepts thousandth-unit requests and rejects finer order quantities", async t => {

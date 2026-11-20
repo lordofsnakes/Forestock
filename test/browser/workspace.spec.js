@@ -483,7 +483,9 @@ test("a market bubble opens a contextual sparrow chat and returns to the same or
   const requests = [];
   await page.route("**/api/chat", route => {
     requests.push(route.request().postDataJSON());
-    return route.fulfill({ json: { reply: "Silver has its own contract. Your copper order uses a separate forecast." } });
+    return route.fulfill({ json: { reply: requests.length === 1
+      ? "Silver has its own contract. Your copper order uses a separate forecast."
+      : "At the cutoff, your spending limit still applies." } });
   });
   await start(page);
   const before = await page.evaluate(() => localStorage.getItem("forestock.v1"));
@@ -499,6 +501,11 @@ test("a market bubble opens a contextual sparrow chat and returns to the same or
   await expect(page.getByRole("log")).toContainText("separate forecast");
   expect(requests[0].marketContext).toContain("0.01 lb of Copper");
   expect(requests[0].marketContext).toContain("Silver at $47");
+  await expect(button(page, "How does this affect my order?")).toHaveCount(0);
+  await button(page, "What happens at the deadline?").click();
+  await expect(page.getByRole("log")).toContainText("your spending limit still applies");
+  expect(requests[1].messages.at(-2).content).toContain("separate forecast");
+  await expect(button(page, "What happens at the deadline?")).toHaveCount(0);
   await button(page, "Back to Orders").click();
   await expect(button(page, "Orders")).toHaveAttribute("aria-current", "page");
   await expect(button(page, "Chat with the sparrow")).toBeFocused();

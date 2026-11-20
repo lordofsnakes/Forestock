@@ -14,7 +14,7 @@ import { sparrowSpeech } from "../public/sparrow-speech.js";
 import { arcTestnet } from "viem/chains";
 import { liveAbi as abi } from "../lib/live-abi.js";
 import { liveDecision } from "../lib/live-decision.js";
-import { totalCents } from "../public/decision.js";
+import { midpointPercent, totalCents } from "../public/decision.js";
 import {
   sendEscrowCalls,
   waitEscrowOperation,
@@ -548,34 +548,36 @@ $("orderList").onclick = (e) => {
     $("editThreshold").showModal();
   }
   if (b?.dataset.chat) {
-    const { o, asset, assessment } = orders.get(b.dataset.chat);
+    const { o, asset, assessment, live, recording } = orders.get(b.dataset.chat);
     const series = hexToString(o.series, { size: 32 });
-    const marketQuote = assessment?.contract
-      ? (assessment.recorded ? "Recorded" : "Live") +
-        " forecast from " +
-        date(Date.parse(assessment.observed) / 1000) +
-        ". " +
-        assessment.reason
-      : "There is no timing quote attached to this assessment.";
-    const impact =
-      assessment?.reason ||
-      "Arc reports this order as " +
-        ["", "watching", "held", "paid", "refunded", "cancelled"][o.status] +
-        ".";
+    const name = asset?.name || series;
+    const market = assessment?.recorded ? recording : live;
+    const contract = assessment?.contract;
+    const status = ["", "watching", "held in escrow", "paid to the supplier", "refunded", "cancelled"][o.status];
+    const quote = contract
+      ? (assessment.recorded ? "Recorded" : "Live") + " forecast from " + date(Date.parse(assessment.observed) / 1000) +
+        ". The market put the chance of " + name + " being at $" + contract.strike +
+        " or higher at expiry on " + date(Date.parse(market.expiry) / 1000) + " at " + midpointPercent(contract) + "%."
+      : assessment?.reason || "Your order is " + status + ".";
+    const impact = assessment ? {
+      Wait: "Your order stays open. This assessment does not trigger an early purchase.",
+      Buy: "Your order qualifies for the agent to reserve funds. The hold still needs onchain confirmation.",
+      Blocked: "The agent cannot reserve funds for this order under the current terms.",
+    }[assessment.kind] : "The order is " + status + ". Changes in the forecast no longer trigger an early purchase for it.";
+    const facts = {
+      quote, impact,
+      deadline: "The order cutoff is " + date(o.orderBy) + ".",
+      terms: "Your early-order threshold is " + o.threshold + "% and your maximum unit price is " + usd(o.capCents) + ".",
+    };
     sessionStorage.setItem(
       "forestock.arcTalk",
       JSON.stringify({
         id: b.dataset.chat,
-        facts: { quote: marketQuote, impact },
-        context:
-          "Arc Testnet order: " +
-          o.quantityMilli / 1000 +
-          " " +
-          (asset?.unit || "units") +
-          " of " +
-          series +
-          ". " +
-          impact,
+        facts,
+        context: "Arc Testnet, passkey-authorized order for " + o.quantityMilli / 1000 + " " +
+          (asset?.unit || "units") + " of " + name + ". Onchain status: " + status + ". " +
+          (assessment?.reason || "") + (o.allowRecording ? " Dated forecasts are allowed." : " Only live forecasts are allowed.") +
+          " While watching, the agent checks for an eligible forecast. At cutoff it can reserve funds without a forecast if supplier and spending limits still allow it. The test supplier receives payment only after a confirmed hold and settlement.",
         draft: {
           series,
           quantity: o.quantityMilli / 1000,
