@@ -61,7 +61,7 @@ export function evaluate(s, m, t, marketTime = t) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 4,
       }) +
-      ". Your early-order threshold is 65%.",
+      (probability >= 0.65 ? ". This meets" : ". This is below") + " your 65% early-order threshold.",
     contract: c,
   };
 }

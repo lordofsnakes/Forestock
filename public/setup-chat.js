@@ -11,7 +11,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
   const restart = document.querySelector("#restart");
   const locked = status !== "Watching";
   const history = [];
-  let draft, pending, marketId, marketContext;
+  let draft, pending, marketId, marketContext, marketFacts;
 
   function say(content, role = "assistant") {
     const line = document.createElement("p");
@@ -142,7 +142,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     restart.hidden = true;
   }
 
-  function marketConversation(id, opening, context, orderDraft) {
+  function marketConversation(id, facts, context, orderDraft) {
     resetComposer();
     if (marketId !== id) {
       history.length = 0;
@@ -150,10 +150,11 @@ export function startChat({ choices, material, quantity, allowance, status, retu
     }
     marketId = id;
     marketContext = context;
+    marketFacts = facts;
     draft = orderDraft;
     document.querySelector("#backToOrders").hidden = false;
     document.querySelector("#welcomeTitle").textContent = "Market chat";
-    if (history.at(-1)?.content !== opening) say(opening);
+    if (history.at(-1)?.content !== facts.quote) say(facts.quote);
     refreshSuggestions();
   }
 
@@ -191,7 +192,7 @@ export function startChat({ choices, material, quantity, allowance, status, retu
       const response = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         signal: request.signal,
-        body: JSON.stringify({ messages: history, draft, locked, localDate, marketContext,
+        body: JSON.stringify({ messages: history, draft, locked, localDate, marketContext, marketFacts,
           catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
         }),
       });

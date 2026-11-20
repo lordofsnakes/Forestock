@@ -237,11 +237,15 @@ function openMarketChat(note) {
   const source = forecast();
   const selectedOrigin = source.market ? (source.replay ? "Recorded" : "Live") + " as of " + dt(source.market.observed) + ". " : "";
   const snapshot = marketNotes.slice(0, 6).map(n => n.label + ". " + n.text).join("\n");
+  const quote = note.label + ". " + note.text;
+  const impact = (note.series && note.series !== current().series ? current().name + " uses its own forecast. " : "") +
+    (o.status === "Watching" ? selectedOrigin + assessment(source).reason :
+      "Your " + current().name + " order is " + ({ Held: "awaiting supplier confirmation.", Paid: "paid.", Refunded: "refunded." }[o.status]));
   const context = "Selected order: " + o.qty + " " + current().unit + " of " + current().name +
     ", status " + o.status + ", needed by " + dt(o.due) + ". Simulated supplier total: " + money(o.qty * current().price) +
-    ". Available demo budget: " + money(available()) + ". " + (o.status === "Watching" ? selectedOrigin + assessment(source).reason : "") +
-    "\nTapped update: " + note.label + ". " + note.text + "\nQuotes on Orders:\n" + snapshot;
-  chat.marketConversation(o.id, note.label + ". " + note.text, context,
+    ". Available demo budget: " + money(available()) + ".\nOrder assessment: " + impact +
+    "\nTapped update: " + quote + "\nQuotes on Orders:\n" + snapshot;
+  chat.marketConversation(o.id, { quote, impact }, context,
     { series: current().series, quantity: o.qty, allowance: s.limit / 100 });
   el.hidden = true;
   document.querySelector("nav").hidden = true;

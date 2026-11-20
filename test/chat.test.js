@@ -92,3 +92,17 @@ test("market questions use the displayed facts and retain the original order", a
   assert.deepEqual(result.data, { reply: "That was a recorded quote.", draft });
   assert.equal((await request({ ...body, marketContext: {} })).code, 400);
 });
+
+test("market chat uses the calculated order assessment for threshold comparisons", async t => {
+  const marketFacts = { quote: "Silver was quoted at 42%.", impact: "The copper signal is 71%. This meets your 65% early-order threshold." };
+  const input = { ...body, marketContext: "Copper order", marketFacts };
+  const previous = process.env.AI_GATEWAY_API_KEY;
+  process.env.AI_GATEWAY_API_KEY = "test";
+  t.after(() => { if (previous === undefined) delete process.env.AI_GATEWAY_API_KEY; else process.env.AI_GATEWAY_API_KEY = previous; });
+  const gateway = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: {
+    content: JSON.stringify({ reply: "71% is below 65%." }),
+  } }] }));
+  assert.equal((await request({ ...input, messages: [{ role: "user", content: "How does this affect my order?" }] })).data.reply, marketFacts.impact);
+  assert.equal(gateway.mock.callCount(), 0);
+  assert.equal((await request(input)).data.reply, marketFacts.quote + " " + marketFacts.impact);
+});
