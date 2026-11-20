@@ -544,7 +544,8 @@ select {
 .review-item { font-size: 1.15rem; }
 .review-item b { font-weight: 600; }
 .review-item-meta { flex-wrap: wrap; margin-top: 3px; color: #69574a; font-size: .87rem; }
-.review-deposit { padding: 14px 0; border-block: 1px solid #dfd0bb; }
+.review-deposit { flex-wrap: wrap; row-gap: 4px; padding: 14px 0; border-block: 1px solid #dfd0bb; }
+.review-deposit .hint { flex-basis: 100%; margin: 0; }
 .review-deposit strong { text-align: right; }
 #orderTerms > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) 8px; align-items: center; gap: 12px; padding: 12px 3px 12px 0; list-style: none; }
 #orderTerms > summary::-webkit-details-marker { display: none; }

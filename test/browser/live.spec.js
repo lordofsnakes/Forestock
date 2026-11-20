@@ -92,14 +92,16 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
     }),
   );
   let balance = "0";
-  await mockArc(page, () => balance);
+  let escrow = "0";
+  await mockArc(page, () => balance, {free: () => parseEther(escrow)});
   await enterSavedOrders(page);
   const authorize = page.locator("#authorize");
   await expect(page.locator("#fundingAddress")).toHaveText(buyer);
   await expect(authorize).toBeDisabled();
   await expect(page.getByRole("link", {name:"Open Circle faucet"})).toHaveAttribute("href","https://faucet.circle.com/");
-  await expect(page.getByText("Escrow deposit", {exact:true})).toBeVisible();
+  await expect(page.getByText("Deposit from your wallet", {exact:true})).toBeVisible();
   await expect(page.locator("#lines")).toContainText("Order by");
+  await expect(page.locator("#depositHelp")).toContainText("This deposit covers the remaining 0.06 test USDC.");
   const recording = page.locator("#approve [name=recording]");
   await expect(recording).toBeHidden();
   await expect(recording).not.toBeChecked();
@@ -113,8 +115,15 @@ test("passkey review submits a funded Arc batch and links the confirmed transact
   await page.getByLabel("Order within two minutes").check();
   await expect(page.locator("#lines")).toContainText("within 2 min");
   await page.locator("#approve [name=deposit]").fill("0");
+  await expect(page.locator("#depositHelp")).toContainText("You still need 0.06 more test USDC");
   await expect(page.locator("#fundingReason")).toContainText("network fee");
   await expect(authorize).toBeDisabled();
+  escrow = "0.06";
+  await enterSavedOrders(page);
+  await expect(page.locator("#depositSummary")).toHaveText("0 test USDC");
+  await expect(page.locator("#depositHelp")).toContainText("Your escrow already covers this 0.06 test USDC order. Your wallet only pays the Arc network fee");
+  await page.locator("#orderTerms summary").click();
+  await page.getByLabel("Order within two minutes").check();
   await page.locator("#approve [name=deposit]").fill("0.06");
   balance = "1";
   await page.getByRole("button", {name:"Check balance"}).click();

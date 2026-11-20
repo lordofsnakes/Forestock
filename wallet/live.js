@@ -64,7 +64,8 @@ let address,
   funds,
   working = false,
   loading = false,
-  previewInitialized = false;
+  previewInitialized = false,
+  draftCost = 0n;
 let liveAssets = [],
   quoteTime = 0;
 const receipts = new Map();
@@ -247,6 +248,21 @@ function updateApproval() {
   $("authorize").disabled = !valid || needsFunds || working;
   $("fundingHelp").hidden = !needsFunds;
   $("depositSummary").textContent = valid ? amount(deposit) + " test USDC" : "Choose a deposit";
+  const remaining = draftCost - funds.free;
+  let fundingText;
+  if (!valid) {
+    fundingText = "Enter a deposit in Buying rules to see how much your escrow will cover.";
+  } else if (remaining <= 0n) {
+    fundingText = "Your escrow already covers this " + amount(draftCost) + " test USDC order. " +
+      (deposit === 0n ? "Your wallet only pays the Arc network fee when you authorize." :
+        "This deposit adds to your available escrow balance. Your wallet also pays the Arc network fee.");
+  } else {
+    fundingText = "You have " + amount(funds.free) + " test USDC available in escrow. " +
+      (deposit < remaining ? "You still need " + amount(remaining - deposit) + " more test USDC to fund this order." :
+        "This deposit covers the remaining " + amount(remaining) + " test USDC.") +
+      " Your wallet also pays the Arc network fee.";
+  }
+  $("depositHelp").textContent = fundingText;
   $("termsSummary").textContent = f.elements.limit.value + " USDC/week · " + f.elements.threshold.value + "%" + (f.elements.recording.checked ? " · Dated forecast allowed" : "") + (f.elements.shortWindow.checked ? " · 2 min cutoff" : "");
   if (needsFunds) {
     $("fundingReason").textContent = "Your wallet has " + amount(funds.wallet) + " test USDC. " +
@@ -318,6 +334,7 @@ function showDraft() {
         '</span>' + (routed ? '<span>' + offer.network + (offer.feeMicros ? ' · up to ' + (offer.feeMicros/1e6).toFixed(4) + ' USDC forwarding' : '') + '</span>' : '') + '<span data-cutoff="' + Number(line.orderBy) + '">Order by ' + date(line.orderBy) + '</span></div>' + comparison + '</li>';
     })
     .join("");
+  draftCost = cost;
   $("priceCaps").innerHTML = draft.lines.map(line =>
     '<p>Maximum price for ' + escape(line.name) + ' <strong>' + usd(line.cap) + ' / ' + escape(line.unit) + '</strong></p>'
   ).join("");

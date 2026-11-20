@@ -43,7 +43,9 @@
         <p id="quoteSource" class="hint" hidden></p>
         <ul id="lines" aria-label="Order items"></ul>
         <form id="approve">
-          <div class="review-deposit"><span>Escrow deposit</span><strong id="depositSummary"></strong></div>
+          <div class="review-deposit"><span>Deposit from your wallet</span><strong id="depositSummary"></strong>
+            <p id="depositHelp" class="hint"></p>
+          </div>
           <details id="orderTerms"><summary><span>Buying rules</span><small id="termsSummary"></small></summary>
           <div class="review-settings">
           <div id="priceCaps"></div>
@@ -58,6 +60,7 @@
           <label
             >Move from wallet into escrow (test USDC)<input
               name="deposit"
+              aria-describedby="depositHelp"
               type="number"
               min="0"
               step=".01"
