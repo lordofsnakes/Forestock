@@ -103,7 +103,10 @@ export default async function chat(req, res) {
       if (!shortString(result.reply, 1200)) throw Error();
       let reply = result.reply;
       if (marketFacts) {
-        reply = /[0-9$%]/.test(reply) ? "{{quote}} {{order}}" : reply;
+        if (/[0-9$%]/.test(reply)) {
+          const explanation = reply.split(/(?<=[.!?])\s+/).filter(sentence => !/[0-9$%{}]/.test(sentence)).join(" ");
+          reply = (explanation || "I use the midpoint of the bid and ask on Gemini’s prediction contract.") + " {{quote}} {{order}}";
+        }
         reply = reply.replace(/\{\{(quote|order)\}\}/g, (_, fact) => fact === "order" ? marketFacts.impact : marketFacts.quote);
         if (reply.length > 1200) reply = marketFacts.impact;
       }

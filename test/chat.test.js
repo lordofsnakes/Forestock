@@ -104,5 +104,7 @@ test("market chat uses the calculated order assessment for threshold comparisons
   } }] }));
   assert.equal((await request({ ...input, messages: [{ role: "user", content: "How does this affect my order?" }] })).data.reply, marketFacts.impact);
   assert.equal(gateway.mock.callCount(), 0);
-  assert.equal((await request(input)).data.reply, marketFacts.quote + " " + marketFacts.impact);
+  const answer = (await request(input)).data.reply;
+  assert.match(answer, /midpoint of the bid and ask/);
+  assert.ok(answer.endsWith(marketFacts.quote + " " + marketFacts.impact));
 });
