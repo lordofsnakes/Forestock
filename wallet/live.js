@@ -159,6 +159,7 @@ document.querySelector("nav").onclick = (e) => {
       { duration: 240 },
     );
 };
+document.querySelector("nav").inert = false;
 const opKey = (target = address) => "forestock.arcPending." + target + "." + buyer;
 const read = (functionName, args = [], target = address) =>
   client.readContract({ address:target, abi, functionName, args });
@@ -958,6 +959,7 @@ async function start() {
     ].map(async (path) => (await fetch(path)).json()),
   );
   catalog = materials.assets;
+  if (view === "signals") loadOutlook();
   if (
     network.chainId !== 5042002 ||
     !isAddress(network.escrow || "") ||
