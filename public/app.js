@@ -41,25 +41,57 @@ function initial() {
     activity: [],
   };
 }
-let s = JSON.parse(localStorage.getItem(key) || "null") || initial(),
+const saved = JSON.parse(localStorage.getItem(key) || "null");
+let s = saved || initial(),
   tab = "Orders",
   market,
   replay = false;
 const welcome = document.querySelector("#welcome");
-let inSetup = !localStorage.getItem(key);
+const setup = document.querySelector("#setup");
+const materialStep = document.querySelector("#materialStep");
+const allowanceStep = document.querySelector("#allowanceStep");
+const setupBack = document.querySelector("#setupBack");
+let inSetup = true;
+
+setup.elements.quantity.value = s.order.qty;
+setup.elements.allowance.value = s.limit / 100;
+document.querySelector("#balanceHint").textContent =
+  "Practice balance · " + (s.balance / 100).toLocaleString("en-US") + " test USDC";
+const lockedOrder = s.order.status !== "Watching";
+setup.elements.asset.disabled = lockedOrder;
+setup.elements.quantity.disabled = lockedOrder;
+
 function showWorkspace() {
   welcome.hidden = !inSetup;
   el.hidden = inSetup;
   document.querySelector("nav").hidden = inSetup;
 }
-showWorkspace();
-document.querySelector("#setup").addEventListener("submit", (event) => {
+function showSetupStep(toAllowance) {
+  materialStep.hidden = materialStep.disabled = toAllowance;
+  allowanceStep.hidden = allowanceStep.disabled = !toAllowance;
+  setupBack.hidden = !toAllowance;
+  document.querySelector("#setupAction").textContent = toAllowance ? "Review order" : "Next";
+  const panel = toAllowance ? allowanceStep : materialStep;
+  panel.classList.add("step-enter");
+  panel.querySelector("legend").focus();
+}
+setupBack.addEventListener("click", () => showSetupStep(false));
+setup.addEventListener("submit", (event) => {
   event.preventDefault();
-  s.order.asset = compact(selected(event.target));
-  s.order.cap = Math.ceil(s.order.asset.price * 1.035);
-  s.order.notes = "";
+  if (allowanceStep.hidden) {
+    showSetupStep(true);
+    return;
+  }
+  const asset = selected(setup);
+  if (!lockedOrder) {
+    if (!saved || asset.series !== current().series) {
+      s.order.asset = compact(asset);
+      s.order.cap = Math.ceil(asset.price * 1.035);
+    }
+    if (!saved) s.order.notes = "";
+    s.order.qty = Number(setup.elements.quantity.value);
+  }
   syncMarket();
-  s.order.qty = Number(event.target.elements.quantity.value);
   s.limit = Math.round(Number(event.target.elements.allowance.value) * 100);
   inSetup = false;
   record(
@@ -75,6 +107,7 @@ document.querySelector("#setup").addEventListener("submit", (event) => {
   );
   showWorkspace();
   render();
+  el.classList.add("step-enter");
   el.querySelector("h1").tabIndex = -1;
   el.querySelector("h1").focus();
 });

@@ -21,6 +21,7 @@ try {
       .evaluate((b) => b.classList.contains("flying")),
     true,
   );
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("button", { name: "Edit need" }).click();
   await page.locator('[name="qty"]').fill("50");
@@ -29,6 +30,8 @@ try {
   await page.getByText("Run at cutoff").click();
   await page.getByText("Accept order").click();
   await page.reload();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("heading", { name: "Supplier receipt" }).waitFor();
   await page.getByRole("button", { name: /Budget/ }).click();
   assert.equal(await page.locator(".big").innerText(), "$310.00");

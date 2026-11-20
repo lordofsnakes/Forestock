@@ -4,7 +4,12 @@ const data = JSON.parse(fs.readFileSync("public/commodities.json"));
 async function start(page, asset = "COPPER") {
   await page.goto("/");
   await page.locator("#setup select").selectOption(asset);
-  await page.getByRole("button", { name: "Review order" }).click();
+  await finishSetup(page);
+}
+async function finishSetup(page) {
+  await expect(page.getByRole("navigation")).toBeHidden();
+  await button(page, "Next").click();
+  await button(page, "Review order").click();
 }
 const button = (page, name) => page.getByRole("button", { name, exact: true });
 test.beforeEach(async ({ page }) => {
@@ -30,6 +35,7 @@ test("all six materials have units, editable quantities and persistent supplier 
     await expect(page.locator(".big")).toHaveText("2 " + unit);
   }
   await page.reload();
+  await finishSetup(page);
   await expect(
     page.getByText("Morning delivery", { exact: true }),
   ).toBeVisible();
@@ -60,6 +66,7 @@ test("a paused allowance blocks purchase; a resumed order can be declined and re
   await button(page, "Orders").click();
   await button(page, "Decline").click();
   await page.reload();
+  await finishSetup(page);
   await expect(
     page.getByRole("heading", { name: "Funds returned" }),
   ).toBeVisible();
@@ -98,15 +105,20 @@ test("live data advances an eligible order and supplier acceptance persists", as
     page.getByRole("heading", { name: "Ready to order" }),
   ).toBeVisible();
   await button(page, "Run decision").click();
+  await page.reload();
+  await expect(page.locator("#setup select")).toBeDisabled();
+  await expect(page.locator('[name="quantity"]')).toBeDisabled();
+  await finishSetup(page);
   await button(page, "Accept order").click();
   await page.reload();
+  await finishSetup(page);
   await expect(
     page.getByRole("heading", { name: "Supplier receipt" }),
   ).toBeVisible();
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$20.00");
 });
-test("legacy orders open without onboarding; mascot respects reduced motion", async ({
+test("legacy orders require onboarding; mascot respects reduced motion", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -135,6 +147,9 @@ test("legacy orders open without onboarding; mascot respects reduced motion", as
     ),
   );
   await page.reload();
+  await button(page, "Next").click();
+  await expect(page.locator("#allowanceStep")).toHaveCSS("animation-name", "none");
+  await button(page, "Review order").click();
   await expect(page.locator(".big")).toHaveText("7 lb");
   await expect(page.locator("#welcome")).toBeHidden();
 });
@@ -173,10 +188,19 @@ test("onboarding validates quantity and budget, supports mascot tap and preserve
   await bird.click();
   await expect(bird).toHaveClass(/flying/);
   await page.locator('[name="quantity"]').fill("0");
-  await button(page, "Review order").click();
-  await expect(page.locator("#welcome")).toBeVisible();
+  await button(page, "Next").click();
+  await expect(page.locator("#materialStep")).toBeVisible();
   await page.locator('[name="quantity"]').fill("25");
+  await button(page, "Next").click();
+  await expect(page.locator("#allowanceStep")).toHaveCSS("animation-name", "step-in");
+  await page.locator('[name="allowance"]').fill("-1");
+  await button(page, "Review order").click();
+  await expect(page.locator("#allowanceStep")).toBeVisible();
   await page.locator('[name="allowance"]').fill("150");
+  await button(page, "Back").click();
+  await expect(page.locator('[name="quantity"]')).toHaveValue("25");
+  await button(page, "Next").click();
+  await expect(page.locator('[name="allowance"]')).toHaveValue("150");
   await button(page, "Review order").click();
   await expect(page.locator(".big")).toHaveText("25 lb");
   await button(page, "Budget").click();
@@ -184,6 +208,7 @@ test("onboarding validates quantity and budget, supports mascot tap and preserve
   await page.locator("#limit").fill("120");
   await button(page, "Save allowance").click();
   await page.reload();
+  await finishSetup(page);
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$120.00");
 });

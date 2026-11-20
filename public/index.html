@@ -22,7 +22,7 @@
         >Forestock
       </div>
     </header>
-    <section id="welcome" hidden aria-labelledby="welcomeTitle">
+    <section id="welcome" aria-labelledby="welcomeTitle">
       <div class="intro">
         <div>
           <h1 id="welcomeTitle">Plan an order</h1>
@@ -38,40 +38,30 @@
         Choose a material and budget to see when to buy.
       </p>
       <form id="setup">
-        <label>Commodity<select name="asset"></select></label>
-        <div class="setup-fields">
-          <label
-            >Quantity needed <small data-unit>lb</small
-            ><input
-              name="quantity"
-              type="number"
-              min="1"
-              max="10000"
-              value="100"
-              required
-          /></label>
-          <label
-            >Weekly allowance <small>test USDC</small
-            ><input
-              name="allowance"
-              type="number"
-              min="0"
-              max="100000"
-              step=".01"
-              value="600"
-              required
-          /></label>
+        <fieldset id="materialStep">
+          <legend tabindex="-1">1 of 2 · Material need</legend>
+          <label>Commodity<select name="asset"></select></label>
+          <label>Quantity needed (<span data-unit>lb</span>)
+            <input name="quantity" type="number" min="1" max="10000" required />
+          </label>
+        </fieldset>
+        <fieldset id="allowanceStep" hidden disabled>
+          <legend tabindex="-1">2 of 2 · Spending allowance</legend>
+          <label>Weekly allowance (test USDC)
+            <input name="allowance" type="number" min="0" max="100000" step=".01" required />
+          </label>
+          <p class="hint" id="balanceHint"></p>
+        </fieldset>
+        <div class="setup-actions">
+          <button id="setupBack" type="button" hidden>Back</button>
+          <button class="primary" type="submit">
+            <span id="setupAction">Next</span> <span aria-hidden="true">→</span>
+          </button>
         </div>
-        <p class="hint">
-          Practice balance · 1,000 test USDC
-        </p>
-        <button class="primary">
-          Review order <span aria-hidden="true">→</span>
-        </button>
       </form>
     </section>
-    <main id="app" aria-live="polite">Loading orders…</main>
-    <nav aria-label="Workspace">
+    <main hidden id="app" aria-live="polite">Loading orders…</main>
+    <nav hidden aria-label="Workspace">
       <button data-tab="Orders">Orders</button
       ><button data-tab="Budget">Budget</button
       ><button data-tab="Activity">Activity</button>
