@@ -106,6 +106,10 @@ export default async function chat(req, res) {
           /^(?:what if|what would|can you explain|how much would)\b/i.test(messages.at(-1).content.trim())) continue;
       line.quantity = null;
       line.amountNote = amount.requested;
+      if (amount.dateNote) {
+        line.dateNote = amount.dateNote;
+        line.dueDate = null;
+      }
       if (!result.reply.includes(amount.requested) || !result.reply.includes(amount.minimum)) {
         clarifications.push(amount.requested + " of " + amount.name + " is below the " + amount.minimum + " minimum.");
       }

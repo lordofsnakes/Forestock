@@ -57,10 +57,12 @@ test("the chat keeps incomplete material lines and buyer wording until clarified
   assert.deepEqual(res.data.draft, proposal);
   proposal.quantity = 100;
   delete proposal.amountNote;
-  const guarded = await request({ ...body, catalog, messages: [{ role: "user", content: "I need 100mg of copper, oil and gold." }] });
+  delete proposal.dateNote;
+  const guarded = await request({ ...body, catalog, messages: [{ role: "user", content: "I need 100mg of copper by the end of this week, and also a bit of oil and gold as well" }] });
   assert.equal(guarded.code, 200);
   assert.equal(guarded.data.draft.quantity, null);
   assert.equal(guarded.data.draft.amountNote, "100 mg");
+  assert.equal(guarded.data.draft.dateNote, "end of this week");
   assert.match(guarded.data.reply, /1 lb/);
   proposal.additional[0].dueDate = "2026-02-31";
   assert.equal((await request({ ...body, catalog })).code, 503);
