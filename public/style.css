@@ -489,8 +489,35 @@ select {
   display: grid; grid-template-columns: calc(var(--speaker-size) * .89) minmax(0, 1fr);
   align-items: start; width: 100%; max-width: none;
 }
+.speech {
+  --bubble-paper: #fffaf1;
+  --bubble-edge: #d3bda2;
+  display: block;
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+  background: var(--bubble-paper);
+  border: 1px solid var(--bubble-edge);
+  border-radius: 14px;
+}
 .speaker-turn .speech {
-  grid-column: 2; grid-row: 1; padding-top: max(0px, calc(var(--speaker-size) * .20 - .75em));
+  grid-area: 1 / 2;
+  margin: max(0px, calc(var(--speaker-size) * .20 - 15px)) 0 0 6px;
+  max-width: calc(100% - 6px);
+}
+.speaker-turn .speech::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 10px;
+  width: 9px;
+  height: 9px;
+  background: var(--bubble-paper);
+  border-left: 1px solid var(--bubble-edge);
+  border-bottom: 1px solid var(--bubble-edge);
+  transform: rotate(45deg);
 }
 #messages .buyer { padding: 7px 12px; background: #efe6d7; color: #513521; border-radius: 12px 12px 2px 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -543,7 +570,7 @@ select {
   margin: 0;
 }
 #guide .portrait { grid-area: 1 / 1; width: var(--speaker-size); }
-#guide .speech { max-width: 32ch; font-size: clamp(16px, 4vw, 19px); }
+#guide .speech { max-width: min(32ch, calc(100% - 6px)); font-size: clamp(16px, 4vw, 19px); }
 #review { max-width: 38rem; margin: 12px 0 28px; padding: 0 0 24px; }
 #review #guide { margin-bottom: 18px; }
 #lines { padding: 0; margin: 0; list-style: none; }

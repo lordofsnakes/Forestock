@@ -358,13 +358,23 @@ test("the sparrow's beak follows the visible words of an AI reply and rests afte
   const last = page.locator("#messages .helper").last();
   await expect(last.locator(".sr-only")).toHaveText("Sparrow: " + reply);
   await expect(last.locator(".spoken-word").first()).toBeVisible();
+  const bubble = last.locator(".speech");
+  await expect(bubble).toHaveCSS("border-top-style", "solid");
   const gap = await last.evaluate(line => {
     const bird = line.querySelector(".portrait").getBoundingClientRect();
+    const speech = line.querySelector(".speech");
+    const box = speech.getBoundingClientRect();
+    const tail = getComputedStyle(speech, "::before");
     const word = line.querySelector(".spoken-word").getBoundingClientRect();
-    return { x: word.left - (bird.left + bird.width * .87), y: word.top + word.height / 2 - (bird.top + bird.height * .20) };
+    return {
+      x: box.left + parseFloat(tail.left) - (bird.left + bird.width * .87),
+      y: box.top + parseFloat(tail.top) + parseFloat(tail.height) / 2 - (bird.top + bird.height * .20),
+      inside: word.left >= box.left && word.right <= box.right && box.right <= innerWidth,
+    };
   });
   expect(Math.abs(gap.x)).toBeLessThan(12);
   expect(Math.abs(gap.y)).toBeLessThan(12);
+  expect(gap.inside).toBe(true);
   const motion = await page.locator(".lower-bill").evaluate(el => el.getAnimations().map(a => a.effect.getKeyframes()));
   expect(motion.flat().some(frame => frame.transform === "rotate(22deg)")).toBe(true);
   await expect(page.locator(".portrait.speaking")).toHaveCount(0);
