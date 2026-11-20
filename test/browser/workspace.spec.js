@@ -12,10 +12,10 @@ async function start(page, asset = "COPPER") {
 }
 async function finishSetup(page) {
   await expect(page.getByRole("navigation")).toBeHidden();
-  if (await page.getByPlaceholder("e.g. I need copper").isVisible()) {
+  if (await button(page, "Copper").isVisible()) {
     await button(page, "Copper").click();
   }
-  if (await page.getByPlaceholder(/^Quantity in /).isVisible()) {
+  if (await page.locator("#suggestions button").filter({ hasText: /^\d+ (lb|MMBtu|bbl|troy oz)$/ }).isVisible()) {
     await page.locator("#suggestions button").first().click();
   }
   await page.locator("#suggestions button").filter({ hasText: "USDC" }).click();
@@ -188,34 +188,35 @@ test("home-screen metadata and public receipts are reachable from the phone layo
     ),
   ).toBe(true);
 });
-test("onboarding validates quantity and budget, supports mascot tap and preserves edited limits", async ({
-  page,
-}) => {
+test("AI questions retain context, corrections update the draft and confirmation opens the order", async ({ page }) => {
+  const requests = [];
+  await page.route("**/api/chat", route => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    const draft = { series: "COPPER", quantity: requests.length === 3 ? 35 : 25, allowance: 150 };
+    return route.fulfill({ json: { reply: ["Shall we review?", "Your allowance is a weekly cap.", "Updated to 35 pounds."][requests.length - 1], draft } });
+  });
   await page.goto("/");
-  const bird = button(page, "Animate the copper-winged sparrow");
-  await bird.click();
-  await expect(bird).toHaveClass(/flying/);
-  await send(page, "oil");
-  await expect(page.getByRole("log")).toContainText("pick Brent or WTI");
-  await send(page, "I need copper");
-  await send(page, "0");
-  await expect(page.getByRole("log")).toContainText("whole number");
-  await send(page, "25 pounds");
-  await send(page, "-1");
-  await expect(page.getByRole("log")).toContainText("caps what can be spent");
-  await button(page, "Start over").click();
-  await send(page, "I need 25 pounds of copper");
-  await send(page, "My budget is $150 per week");
-  await expect(page.locator(".message").last()).toHaveCSS("animation-name", "step-in");
-  await expect(page.getByRole("log")).toContainText("25 lb of Copper");
-  await send(page, "yes");
-  await expect(page.locator(".order-summary")).toContainText("25 lb");
+  await send(page, "Our shop needs twenty-five pounds of copper. Set aside $150 each week.");
+  await expect(page.locator(".draft-terms")).toContainText("25 lb of Copper");
+  await send(page, "How does that cap work?");
+  await expect(page.getByRole("log")).toContainText("weekly cap");
+  await send(page, "Actually make that thirty-five pounds.");
+  await expect(page.locator(".draft-terms")).toContainText("35 lb of Copper");
+  expect(requests[2].draft.quantity).toBe(25);
+  expect(requests[2].messages.some(m => m.content.includes("weekly cap"))).toBe(true);
+  await button(page, "Review order").click();
+  await expect(page.locator(".order-summary")).toContainText("35 lb");
   await button(page, "Budget").click();
   await expect(page.locator(".big")).toHaveText("$150.00");
-  await page.locator("#limit").fill("120");
-  await button(page, "Save allowance").click();
-  await page.reload();
+});
+
+test("AI outage keeps the message available for retry and quick replies still work", async ({ page }) => {
+  await page.route("**/api/chat", r => r.fulfill({ status: 503, body: "{}" }));
+  await page.goto("/");
+  await send(page, "What is a weekly allowance?");
+  await expect(page.getByRole("log")).toContainText("couldn’t reach AI chat");
+  await expect(page.getByRole("textbox")).toHaveValue("What is a weekly allowance?");
   await finishSetup(page);
-  await button(page, "Budget").click();
-  await expect(page.locator(".big")).toHaveText("$120.00");
+  await expect(page.locator(".order-summary")).toContainText("100 lb");
 });

@@ -1,149 +1,134 @@
-const unitWords = {
-  lb: ["lb", "lbs", "pound", "pounds"],
-  bbl: ["bbl", "barrel", "barrels"],
-  "troy oz": ["troy oz", "troy ounce", "troy ounces"],
-  MMBtu: ["mmbtu"],
-};
-
-function words(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function quantityIn(text, asset) {
-  const units = unitWords[asset.unit] || [asset.unit];
-  return readAmount(text, units, 10000, false);
-}
-
-function readAmount(text, units, maximum, currency) {
-  const unit = units.map(unit => unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const pattern = new RegExp(
-    "^(?:I need |about |up to |my budget is )?" +
-    (currency ? "\\$?\\s*" : "") +
-    "(\\d{1,3}(?:,\\d{3})+|\\d+)" +
-    (currency ? "(\\.\\d{1,2})?" : "") +
-    "(?:\\s*(?:" + unit + "))?(?:\\s*(?:please|per week|a week|weekly))?[.!]?$", "i",
-  );
-  const match = text.trim().match(pattern);
-  if (!match) return null;
-  const value = Number(match[1].replaceAll(",", "") + (match[2] || ""));
-  return value >= (currency ? 0 : 1) && value <= maximum ? value : null;
-}
-
 export function startChat({ choices, material, quantity, allowance, status, returning, finish }) {
   const form = document.querySelector("#setup");
   const input = form.elements.reply;
+  const send = form.querySelector("button");
   const messages = document.querySelector("#messages");
   const suggestions = document.querySelector("#suggestions");
   const restart = document.querySelector("#restart");
   const locked = status !== "Watching";
-  let step, asset, qty, limit;
+  const history = [];
+  let draft, pending;
 
-  function say(text, buyer = false) {
+  function say(content, role = "assistant") {
     const line = document.createElement("p");
-    line.className = (buyer ? "buyer" : "helper") + " message step-enter";
-    line.setAttribute("aria-label", (buyer ? "You. " : "Purchasing helper. ") + text);
-    line.textContent = text;
+    line.className = (role === "user" ? "buyer" : "helper") + " message step-enter";
+    line.textContent = content;
     messages.append(line);
     messages.scrollTop = messages.scrollHeight;
+    history.push({ role, content });
+    if (history.length > 16) history.shift();
+  }
+
+  function selected() {
+    return choices().find(a => a.series === draft.series);
+  }
+
+  function ready() {
+    return selected() && draft.quantity !== null && draft.allowance !== null;
+  }
+
+  function summary() {
+    return draft.quantity + " " + selected().unit + " of " + selected().name +
+      " · " + draft.allowance.toLocaleString("en-US") + " test USDC per week";
   }
 
   function refreshSuggestions() {
-    let replies;
-    if (step === "material") replies = choices().map(a => a.name);
-    if (step === "quantity") replies = [quantity + " " + asset.unit];
-    if (step === "allowance") replies = [allowance + " USDC"];
-    if (step === "review") replies = ["Review order"];
-    suggestions.replaceChildren(...replies.map(reply => {
+    suggestions.replaceChildren();
+    function offer(label, action) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = reply;
-      button.onclick = () => answer(reply);
-      return button;
-    }));
+      button.textContent = label;
+      button.onclick = action;
+      suggestions.append(button);
+    }
+    if (pending) return;
+    if (ready()) {
+      const terms = document.createElement("p");
+      terms.className = "draft-terms";
+      terms.textContent = summary();
+      suggestions.append(terms);
+      offer("Review order", () => finish(selected(), draft.quantity, draft.allowance));
+    } else if (!selected()) {
+      for (const a of choices()) offer(a.name, () => pick(a.name, { series: a.series }));
+    } else if (draft.quantity === null) {
+      const label = quantity + " " + selected().unit;
+      offer(label, () => pick(label, { quantity }));
+    } else {
+      const label = allowance + " USDC";
+      offer(label, () => pick(label, { allowance }));
+    }
   }
 
-  function ask(next, text, placeholder) {
-    step = next;
-    say(text);
-    input.placeholder = placeholder;
-    input.inputMode = next === "quantity" ? "numeric" : next === "allowance" ? "decimal" : "text";
+  function pick(label, update) {
+    say(label, "user");
+    Object.assign(draft, update);
+    restart.hidden = false;
+    if (ready()) say("Ready when you are. Review your order below or tell me what to change.");
+    else if (draft.quantity === null) say("How much " + selected().name + " do you need, in " + selected().unit + "?");
+    else say("What weekly spending allowance should I use, in test USDC?");
     refreshSuggestions();
   }
 
-  function askAllowance() {
-    ask("allowance", "What’s your weekly spending allowance in test USDC?", "e.g. 600 USDC");
-  }
-
   function begin() {
+    pending?.abort();
+    pending = null;
+    history.length = 0;
     messages.replaceChildren();
+    draft = { series: locked ? material.series : null, quantity: locked ? quantity : null, allowance: null };
     input.value = "";
+    input.placeholder = "Ask a question or describe your order";
+    send.disabled = false;
+    send.textContent = "Send";
     restart.hidden = true;
-    asset = material;
-    qty = quantity;
-    limit = allowance;
-    if (locked) {
-      say("Welcome back. Your order for " + qty + " " + asset.unit + " of " + asset.name + " is " + status.toLowerCase() + ".");
-      askAllowance();
-    } else {
-      ask("material", returning
-        ? "Welcome back. You last chose " + asset.name + ". Which material should we plan for today?"
-        : "Hi! I can help plan your next purchase. What material do you need?", "e.g. I need copper");
-    }
+    if (locked) say("Welcome back. Your order for " + quantity + " " + material.unit + " of " + material.name +
+      " is " + status.toLowerCase() + ". What weekly allowance should I use?");
+    else say(returning ? "Welcome back. You last chose " + material.name + ". What do you need this time?"
+      : "What are you buying for your next production run? Tell me what you need, or ask me how ordering works.");
+    refreshSuggestions();
   }
 
-  function answer(text) {
-    text = text.trim();
-    if (!text) return;
-    say(text, true);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text || pending) return;
+    if (ready() && /^(yes|confirm|review order)[.!]?$/i.test(text)) {
+      finish(selected(), draft.quantity, draft.allowance);
+      return;
+    }
+    say(text, "user");
     input.value = "";
     restart.hidden = false;
-    if (step === "material") {
-      const request = " " + words(text) + " ";
-      const matches = choices().filter(a =>
-        [a.name, a.series].some(alias => request.includes(" " + words(alias) + " ")));
-      if (matches.length !== 1) {
-        say("Choose one of the listed materials. For oil, pick Brent or WTI.");
-        return;
+    const request = new AbortController();
+    pending = request;
+    send.disabled = true;
+    send.textContent = "Thinking…";
+    refreshSuggestions();
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        signal: request.signal,
+        body: JSON.stringify({ messages: history, draft, locked,
+          catalog: choices().map(({ series, name, unit }) => ({ series, name, unit })),
+        }),
+      });
+      if (!response.ok) throw Error();
+      const result = await response.json();
+      if (request !== pending) return;
+      draft = result.draft;
+      say(result.reply);
+    } catch {
+      if (request !== pending) return;
+      history.pop();
+      say("I couldn’t reach AI chat. Send your message again or use a suggested reply.");
+      if (!input.value) input.value = text;
+    } finally {
+      if (request === pending) {
+        pending = null;
+        send.disabled = false;
+        send.textContent = "Send";
+        refreshSuggestions();
       }
-      asset = matches[0];
-      const alias = [asset.name, asset.series].find(name =>
-        text.toLowerCase().endsWith(name.toLowerCase()));
-      if (alias) {
-        const prefix = text.slice(0, -alias.length).trim().replace(/\s+of$/i, "");
-        const amount = quantityIn(prefix, asset);
-        if (amount !== null) {
-          qty = amount;
-          askAllowance();
-          return;
-        }
-      }
-      ask("quantity", "How much " + asset.name + " do you need? I’ll use " + asset.unit + " for this order.", "Quantity in " + asset.unit);
-    } else if (step === "quantity") {
-      const amount = quantityIn(text, asset);
-      if (amount === null) {
-        say("Send a whole number from 1 to 10,000 in " + asset.unit + ".");
-        return;
-      }
-      qty = amount;
-      askAllowance();
-    } else if (step === "allowance") {
-      const amount = readAmount(text, ["test USDC", "USDC", "dollars"], 100000, true);
-      if (amount === null) {
-        say("The allowance caps what can be spent each week. Send an amount from 0 to 100,000 test USDC, with up to two decimal places.");
-        return;
-      }
-      limit = amount;
-      ask("review", "Got it. " + qty + " " + asset.unit + " of " + asset.name + ", with a weekly allowance of " + limit.toLocaleString("en-US") + " test USDC. Ready to review your order?", "Reply yes to continue");
-    } else if (/^(yes|yep|ok|okay|review order|confirm)[.!]?$/i.test(text)) {
-      finish(asset, qty, limit);
-    } else {
-      say("Reply yes to open your order, or choose Start over to change your answers.");
     }
-  }
-
-  form.addEventListener("submit", event => {
-    event.preventDefault();
-    answer(input.value);
   });
   restart.onclick = begin;
   begin();

@@ -1,11 +1,12 @@
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
+import chat from "./api/chat.js";
 import market from "./api/market.js";
 http
   .createServer(async (req, res) => {
     const route = new URL(req.url, "http://localhost").pathname;
-    if (route === "/api/market") {
+    if (route === "/api/market" || route === "/api/chat") {
       res.status = (n) => {
         res.statusCode = n;
         return res;
@@ -14,6 +15,16 @@ http
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify(d));
       };
+      if (route === "/api/chat") {
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+          if (body.length > 24000) return res.status(413).json({ error: "Message too long." });
+        }
+        try { req.body = JSON.parse(body || "{}"); }
+        catch { return res.status(400).json({ error: "Invalid JSON." }); }
+        return chat(req, res);
+      }
       return market(req, res);
     }
     try {

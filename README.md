@@ -38,3 +38,9 @@ Vercel deploys static assets from public/ and the public Gemini endpoint from ap
 ## Feature tests
 
 Run `npm ci` and `npm run test:all` with Chrome, Node 22+ and Foundry on the machine. This runs the decision and Gemini API tests, Solidity vault tests, mobile browser flows and an isolated purchasing-worker rehearsal. The browser suite starts its own server on port 3271 with controlled market responses. The worker suite starts Anvil on port 18546 with disposable accounts and a temporary order directory. Both ports must be available. To smoke-test the public preview, run `APP_URL=https://forestock-brown.vercel.app node scripts/mobile-check.js`.
+
+### AI purchasing chat
+
+Typed messages go to the server-side `/api/chat` endpoint, which uses Google Gemini 2.5 Flash-Lite through Vercel AI Gateway. The model receives recent conversation turns, the material catalog and the current draft. Buyers can ask questions or revise terms before selecting **Review order**. Tap suggestions also work during an AI outage. The separate Gemini Prediction Markets feed supplies the purchasing signal.
+
+On Vercel the function uses deployment OIDC. For local development, set `AI_GATEWAY_API_KEY` in the server environment before running `npm run dev`. Optionally set `AI_GATEWAY_MODEL` to a Gateway model supporting JSON output.
