@@ -79,6 +79,7 @@ manual.onclick = () => {
   options.hidden = !options.hidden;
   manual.setAttribute("aria-expanded", String(!options.hidden));
 };
+manual.disabled = false;
 retry.onclick = loadWallet;
 open.onclick = () => {
   close.before(controls);
